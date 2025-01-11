@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "USR-VM",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

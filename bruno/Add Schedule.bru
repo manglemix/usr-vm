@@ -1,0 +1,18 @@
+meta {
+  name: Add Schedule
+  type: http
+  seq: 3
+}
+
+post {
+  url: https://127.0.0.1/api/scheduler/add/schedule
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "name": "Naj",
+    "times": [0, 4, 669]
+  }
+}

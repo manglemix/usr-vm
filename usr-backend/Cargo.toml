@@ -1,0 +1,19 @@
+[package]
+name = "usr-backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.95"
+axum = { version = "0.8.1", features = ["macros"] }
+axum-server = { version = "0.7.1", features = ["tls-rustls"] }
+parking_lot = "0.12.3"
+rustls = { version = "0.23.21", features = ["ring"] }
+sea-orm = { version = "1.1.4", features = ["sqlx-sqlite", "runtime-tokio-rustls"] }
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.135"
+tokio = { version = "1.43.0", features = ["rt-multi-thread", "net", "parking_lot", "signal", "macros", "io-util"] }
+tower = "0.5.2"
+tower-http = { version = "0.6.2", features = ["cors", "compression-full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["chrono"] }

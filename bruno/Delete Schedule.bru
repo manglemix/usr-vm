@@ -1,0 +1,18 @@
+meta {
+  name: Delete Schedule
+  type: http
+  seq: 5
+}
+
+delete {
+  url: https://127.0.0.1/api/scheduler/del/schedule
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "name": "Naj",
+    "times": [669]
+  }
+}

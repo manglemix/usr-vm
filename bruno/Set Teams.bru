@@ -1,0 +1,18 @@
+meta {
+  name: Set Teams
+  type: http
+  seq: 4
+}
+
+post {
+  url: https://127.0.0.1/api/scheduler/set/team
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "name": "Naj",
+    "teams": ["Software", "Admin"]
+  }
+}

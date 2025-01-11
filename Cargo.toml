@@ -1,0 +1,2 @@
+[workspace]
+members = ["usr-backend", "usr-backend-runner"]
