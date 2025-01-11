@@ -1,7 +1,7 @@
 use std::{collections::{hash_map::Entry, HashMap, HashSet}, sync::Arc};
 
 use axum::{extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, get, post}, Json, Router};
-use sea_orm::{sea_query::Table, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter, QuerySelect, Schema, TransactionTrait};
+use sea_orm::{sea_query::Table, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, Schema, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -64,20 +64,8 @@ struct SetTeam {
 
 #[axum::debug_handler]
 async fn set_team(State(db): State<Arc<DatabaseConnection>>, Json(set_team): Json<SetTeam>) -> (StatusCode, &'static str) {
-    // let result = team::Entity::find().filter(team::Column::Name.eq(set_team.name.clone())).column(team::Column::Team).all(&*db).await;
-    // let to_delete = match result {
-    //     Ok(x) => x,
-    //     Err(e) => {
-    //         error!("Failed to find schedule: {e}");
-    //         return (StatusCode::INTERNAL_SERVER_ERROR, "");
-    //     }
-    // };
-    
     let result = db.transaction(|tx| Box::pin(async move {
         team::Entity::delete_many().filter(team::Column::Name.eq(set_team.name.clone())).exec(tx).await?;
-        // for model in to_delete {
-        //     model.delete(tx).await?;
-        // }
         for team in set_team.teams {
             let active_model = team::ActiveModel {
                 name: ActiveValue::Set(set_team.name.clone()),
