@@ -20,13 +20,15 @@ struct PendingSchedule {
 
 #[axum::debug_handler]
 async fn add_schedule(State(state): State<Arc<UsrState>>, Json(pending_schedule): Json<PendingSchedule>) -> (StatusCode, &'static str) {
+    if pending_schedule.name.is_empty() {
+        return (StatusCode::BAD_REQUEST, "");
+    }
     let result = state.db.transaction(|tx| Box::pin(async move {
         for time in pending_schedule.times {
-            let active_model = availability::ActiveModel {
+            availability::Entity::insert(availability::ActiveModel {
                 name: ActiveValue::Set(pending_schedule.name.clone()),
                 time: ActiveValue::Set(time),
-            };
-            active_model.insert(tx).await?;
+            }).on_conflict_do_nothing().exec(tx).await?;
         }
         Result::<_, sea_orm::DbErr>::Ok(())
     })).await;
@@ -41,13 +43,15 @@ async fn add_schedule(State(state): State<Arc<UsrState>>, Json(pending_schedule)
 
 #[axum::debug_handler]
 async fn del_schedule(State(state): State<Arc<UsrState>>, Json(pending_schedule): Json<PendingSchedule>) -> (StatusCode, &'static str) {
+    if pending_schedule.name.is_empty() {
+        return (StatusCode::BAD_REQUEST, "");
+    }
     let result = state.db.transaction(|tx| Box::pin(async move {
         for time in pending_schedule.times {
-            let active_model = availability::ActiveModel {
-                name: ActiveValue::Set(pending_schedule.name.clone()),
-                time: ActiveValue::Set(time),
-            };
-            active_model.delete(tx).await?;
+            availability::Entity::delete(availability::ActiveModel {
+                name: ActiveValue::Unchanged(pending_schedule.name.clone()),
+                time: ActiveValue::Unchanged(time),
+            }).exec(tx).await?;
         }
         Result::<_, sea_orm::DbErr>::Ok(())
     })).await;
@@ -68,6 +72,9 @@ struct SetTeam {
 
 #[axum::debug_handler]
 async fn set_teams(State(state): State<Arc<UsrState>>, Json(set_team): Json<SetTeam>) -> (StatusCode, &'static str) {
+    if set_team.name.is_empty() {
+        return (StatusCode::BAD_REQUEST, "");
+    }
     let result = state.db.transaction(|tx| Box::pin(async move {
         team::Entity::delete_many().filter(team::Column::Name.eq(set_team.name.clone())).exec(tx).await?;
         for team in set_team.teams {
@@ -136,11 +143,7 @@ async fn get_schedule(State(state): State<Arc<UsrState>>) -> Response {
         availabilities: {
             let mut out: Box<[Vec<String>]> = std::iter::from_fn(|| Some(Vec::default())).take(7 * 8 * 4).collect();
             for model in availabilities {
-                let hour_of_day = model.time % 24 * 4;
-                if hour_of_day < 9 * 4 || hour_of_day >= 17 * 4 {
-                    continue;
-                }
-                out[model.time as usize - 9 * 4].push(model.name);
+                out[model.time as usize].push(model.name);
             }
             out
         },

@@ -1,5 +1,5 @@
 use std::{
-    io::{LineWriter, Write}, net::SocketAddr, path::Path, sync::Arc
+    backtrace::Backtrace, io::{LineWriter, Write}, net::SocketAddr, panic::set_hook, path::Path, sync::Arc
 };
 
 use axum::{routing::get, Router};
@@ -10,7 +10,7 @@ use sea_orm::{Database, DatabaseConnection};
 use serde::Deserialize;
 use tower::ServiceBuilder;
 use tower_http::cors::Any;
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 
 mod scheduler;
@@ -73,6 +73,11 @@ async fn main() -> anyhow::Result<()> {
             LogWriter { inner: log_file }
         })
         .init();
+
+    set_hook(Box::new(|info| {
+        let backtrace = Backtrace::capture();
+        error!("{}\n{backtrace}", info);
+    }));
 
     let db = Database::connect("sqlite://usr-db.sqlite?mode=rwc").await?;
     let config: Config = serde_json::from_reader(std::fs::File::open("config.json")?)?;

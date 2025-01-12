@@ -5,7 +5,7 @@
 
 	let name = $state('');
 
-	const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+	const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 	let inSoftware = $state(false);
 	let inMechanical = $state(false);
@@ -37,6 +37,40 @@
 			inAdmin = teams.Admin.includes(name);
 		}
 	});
+	function uploadTeams() {
+		if (name.length === 0) {
+			return;
+		}
+		const teams = [];
+		if (inSoftware) {
+			teams.push('Software');
+		}
+		if (inMechanical) {
+			teams.push('Mechanical');
+		}
+		if (inElectrical) {
+			teams.push('Electrical');
+		}
+		if (inSystems) {
+			teams.push('Systems');
+		}
+		if (inSocial) {
+			teams.push('Social');
+		}
+		if (inAdmin) {
+			teams.push('Admin');
+		}
+		fetch(`${PUBLIC_API_ENDPOINT}/api/scheduler/set/team`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				name,
+				teams
+			})
+		});
+	}
 	$effect(() => {
 		if (inSoftware) {
 			if (untrack(() => teams.Software === undefined)) {
@@ -47,6 +81,7 @@
 		} else {
 			teams.Software = untrack(() => teams.Software)?.filter((n) => n !== name) ?? [];
 		}
+		uploadTeams();
 	});
 	$effect(() => {
 		if (inMechanical) {
@@ -58,6 +93,7 @@
 		} else {
 			teams.Mechanical = untrack(() => teams.Mechanical)?.filter((n) => n !== name) ?? [];
 		}
+		uploadTeams();
 	});
 	$effect(() => {
 		if (inElectrical) {
@@ -69,6 +105,7 @@
 		} else {
 			teams.Electrical = untrack(() => teams.Electrical)?.filter((n) => n !== name) ?? [];
 		}
+		uploadTeams();
 	});
 	$effect(() => {
 		if (inSystems) {
@@ -80,6 +117,7 @@
 		} else {
 			teams.Systems = untrack(() => teams.Systems)?.filter((n) => n !== name) ?? [];
 		}
+		uploadTeams();
 	});
 	$effect(() => {
 		if (inSocial) {
@@ -91,6 +129,7 @@
 		} else {
 			teams.Social = untrack(() => teams.Social)?.filter((n) => n !== name) ?? [];
 		}
+		uploadTeams();
 	});
 	$effect(() => {
 		if (inAdmin) {
@@ -102,6 +141,7 @@
 		} else {
 			teams.Admin = untrack(() => teams.Admin)?.filter((n) => n !== name) ?? [];
 		}
+		uploadTeams();
 	});
 
 	async function refreshSchedule() {
@@ -113,67 +153,243 @@
 
 	if (browser) {
 		refreshSchedule();
+		window.addEventListener('mouseup', async () => {
+			if (!updateDrag) {
+				return;
+			}
+			updateDrag = false;
+			if (name.length === 0) {
+				return;
+			}
+			const times = [];
+
+			for (let y = Math.min(dragStartY, dragEndY); y <= Math.max(dragStartY, dragEndY); y++) {
+				for (let x = Math.min(dragStartX, dragEndX); x <= Math.max(dragStartX, dragEndX); x++) {
+					times.push(y + x * 32);
+				}
+			}
+
+			const body = JSON.stringify({
+				name,
+				times
+			});
+
+			if (deleting) {
+				const response = await fetch(
+					`${PUBLIC_API_ENDPOINT}/api/scheduler/del/schedule`,
+					{
+						method: 'DELETE',
+						headers: {
+							'Content-Type': 'application/json',
+						},
+						body
+					}
+				);
+				if (response.ok) {
+					for (const i of times) {
+						availabilities[i] = availabilities[i].filter((n) => n !== name);
+					}
+					availabilities = availabilities.map(a => a);
+				}
+			} else {
+				const response = await fetch(
+					`${PUBLIC_API_ENDPOINT}/api/scheduler/add/schedule`,
+					{
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+						},
+						body
+					}
+				);
+				if (response.ok) {
+					for (const i of times) {
+						if (!availabilities[i].includes(name)) {
+							availabilities[i].push(name);
+						}
+					}
+					availabilities = availabilities.map(a => a);
+				}
+			}
+		});
+	}
+
+	let tabIndex = $state(0);
+	let updateDrag = $state(false);
+	let deleting = $state(false);
+	let dragStartX = $state(0);
+	let dragStartY = $state(0);
+	let dragEndX = $state(0);
+	let dragEndY = $state(0);
+
+	function isPositionInsideDrag(x: number, y: number) {
+		return (
+			Math.min(dragStartX, dragEndX) <= x &&
+			x <= Math.max(dragStartX, dragEndX) &&
+			Math.min(dragStartY, dragEndY) <= y &&
+			y <= Math.max(dragStartY, dragEndY)
+		);
+	}
+
+	function isPositionInsideAvailabilities(x: number, y: number, name: string) {
+		return availabilities[y + x * 32]?.includes(name) ?? false;
+	}
+
+	function isUpdateCellGreen(x: number, y: number) {
+		if (updateDrag) {
+			if (isPositionInsideDrag(x, y)) {
+				if (deleting) {
+					return false;
+				} else {
+					return true;
+				}
+			}
+		}
+		return isPositionInsideAvailabilities(x, y, name);
+	}
+
+	function timeString(y: number) {
+		const hour = Math.floor(y/4)+9;
+		let hourCorrected;
+		if (hour === 12) {
+			hourCorrected = 12;
+		} else {
+			hourCorrected = hour % 12;
+		}
+		const minutes = y % 4 * 15;
+		return `${hourCorrected}:${minutes === 0 ? "00" : minutes}${hour < 12 ? 'a' : 'p'}`;
 	}
 </script>
-
-<input bind:value={name} placeholder="Name" />
-
-<section>
-	<label>
-		<input type="checkbox" bind:checked={inSoftware} />
-		Software
-	</label>
-	<label>
-		<input type="checkbox" bind:checked={inMechanical} />
-		Mechanical
-	</label>
-	<label>
-		<input type="checkbox" bind:checked={inElectrical} />
-		Electrical
-	</label>
-	<label>
-		<input type="checkbox" bind:checked={inSystems} />
-		Systems
-	</label>
-	<label>
-		<input type="checkbox" bind:checked={inSocial} />
-		Social
-	</label>
-	<label>
-		<input type="checkbox" bind:checked={inAdmin} />
-		Admin
-	</label>
-</section>
 
 <table>
 	<thead>
 		<tr>
+			<th></th>
 			{#each DAYS as day}
 				<th>{day}</th>
 			{/each}
 		</tr>
 	</thead>
 	<tbody>
-		{#each { length: 32 } as i}
+		{#each { length: 32 } as _, y}
 			<tr>
-				{#each DAYS as _, j}
-					<td> A </td>
+				<td>{timeString(y)}</td>
+				{#each DAYS as _, x}
+					{#if tabIndex === 0}
+						<td class="schedule-cell" style:--p={isUpdateCellGreen(x, y) ? "100%" : "0%"} onmousedown={(event) => {
+							if (name === '') {
+								return;
+							}
+							event.stopPropagation();
+							deleting = isPositionInsideAvailabilities(x, y, name);
+							updateDrag = true;
+							dragStartX = x;
+							dragStartY = y;
+							dragEndX = x;
+							dragEndY = y;
+						}} onmouseenter={(event) => {
+							if (updateDrag) {
+								event.stopPropagation();
+								dragEndX = x;
+								dragEndY = y;
+							}
+						}}>
+						</td>
+					{:else}
+						<td class="schedule-cell" style:--p={`0%`}>
+						</td>
+					{/if}
 				{/each}
 			</tr>
 		{/each}
 	</tbody>
 </table>
 
+<section id="schedule-operations">
+	<div id="schedule-tabs" class="flex flex-row">
+		<button
+			onclick={() => {
+				tabIndex = 0;
+			}}
+			id={tabIndex === 0 ? 'selected-operation' : ''}
+		>
+			Update
+		</button>
+		<button
+			onclick={() => {
+				refreshSchedule();
+				tabIndex = 1;
+			}}
+			id={tabIndex === 1 ? 'selected-operation' : ''}
+		>
+			Filter
+		</button>
+	</div>
+	<section class="flex flex-col">
+		{#if tabIndex === 0}
+			<input bind:value={name} placeholder="Your Name" />
+			
+			<section class="flex flex-col">
+				<label>
+					<input type="checkbox" bind:checked={inSoftware} disabled={name.length === 0} />
+					Software
+				</label>
+				<label>
+					<input type="checkbox" bind:checked={inMechanical} disabled={name.length === 0} />
+					Mechanical
+				</label>
+				<label>
+					<input type="checkbox" bind:checked={inElectrical} disabled={name.length === 0} />
+					Electrical
+				</label>
+				<label>
+					<input type="checkbox" bind:checked={inSystems} disabled={name.length === 0} />
+					Systems
+				</label>
+				<label>
+					<input type="checkbox" bind:checked={inSocial} disabled={name.length === 0} />
+					Social
+				</label>
+				<label>
+					<input type="checkbox" bind:checked={inAdmin} disabled={name.length === 0} />
+					Admin
+				</label>
+			</section>
+		{:else if tabIndex === 1}
+		{/if}
+	</section>
+</section>
+
 <style>
 	th {
 		background-color: darkgray;
+		padding: 0.2rem;
+		min-width: 3rem;
+	}
+	.schedule-cell {
+		background-color: color-mix(in oklab, lightgray, lightgreen var(--p));
+		padding: 0;
 	}
 	td {
 		background-color: lightgray;
+		padding-right: 0.2rem;
 	}
 	th,
 	td {
+		border: 1px solid black;
+		/* user-drag: none; */
+		-webkit-user-drag: none;
+		user-select: none;
+		-moz-user-select: none;
+		-webkit-user-select: none;
+		-ms-user-select: none;
+	}
+	#schedule-tabs > button {
+		background-color: darkgray;
 		padding: 0.2rem;
 		border: 1px solid black;
+	}
+	#schedule-operations #selected-operation {
+		background-color: lightgray;
 	}
 </style>
