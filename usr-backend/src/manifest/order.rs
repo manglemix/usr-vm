@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -38,4 +40,14 @@ pub enum Status {
     Delivered,
     #[sea_orm(string_value = "I")]
     InStorage,
+}
+
+impl Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self == &Self::InStorage {
+            write!(f, "In Storage")
+        } else {
+            write!(f, "{:?}", self)
+        }
+    }
 }

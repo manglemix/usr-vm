@@ -1,0 +1,18 @@
+meta {
+  name: Update Order
+  type: http
+  seq: 9
+}
+
+post {
+  url: http://127.0.0.1/api/manifest/update/order
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "id": 1,
+    "status": "InStorage"
+  }
+}

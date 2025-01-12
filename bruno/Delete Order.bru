@@ -1,0 +1,17 @@
+meta {
+  name: Delete Order
+  type: http
+  seq: 8
+}
+
+delete {
+  url: http://127.0.0.1/api/manifest/del/order
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "id": 3
+  }
+}
