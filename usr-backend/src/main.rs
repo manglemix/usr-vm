@@ -3,10 +3,10 @@ use std::{
 };
 
 use axum::{http::HeaderValue, routing::get, Router};
-use axum_server::tls_rustls::RustlsConfig;
+use discord_webhook2::webhook::DiscordWebhook;
 use parking_lot::Mutex;
 use rustls::crypto::ring::default_provider;
-use sea_orm::Database;
+use sea_orm::{Database, DatabaseConnection};
 use serde::Deserialize;
 use tower::ServiceBuilder;
 use tower_http::cors::Any;
@@ -14,6 +14,7 @@ use tracing::info;
 use tracing_subscriber::FmtSubscriber;
 
 mod scheduler;
+mod manifest;
 
 struct LogWriter {
     inner: &'static Mutex<LineWriter<std::fs::File>>,
@@ -35,7 +36,14 @@ impl Write for LogWriter {
 
 #[derive(Deserialize)]
 struct Config {
+    new_orders_webhook: String,
+    order_updates_webhook: String,
+}
 
+struct UsrState {
+    db: DatabaseConnection,
+    new_orders_webhook: DiscordWebhook,
+    order_updates_webhook: DiscordWebhook,
 }
 
 #[tokio::main]
@@ -67,11 +75,13 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let db = Database::connect("sqlite://usr-db.sqlite?mode=rwc").await?;
+    let config: Config = serde_json::from_reader(std::fs::File::open("config.json")?)?;
 
     if Path::new(".reset-db").exists() {
         info!("Resetting DB");
         std::fs::remove_file(".reset-db")?;
         scheduler::reset_tables(&db).await?;
+        manifest::reset_tables(&db).await?;
         info!("DB Reset");
     }
 
@@ -82,28 +92,50 @@ async fn main() -> anyhow::Result<()> {
         )
         .nest(
             "/api",
-            Router::new().nest("/scheduler", scheduler::router()),
+            Router::new()
+                .nest("/scheduler", scheduler::router())
+                .nest("/manifest", manifest::router()),
         )
         .layer(
             ServiceBuilder::new()
                 .layer(
                     tower_http::cors::CorsLayer::new()
-                        .allow_origin("utahrobotics.github.io".parse::<HeaderValue>().unwrap())
+                        .allow_origin([
+                            "https://utahrobotics.github.io".parse::<HeaderValue>().unwrap(),
+                            #[cfg(debug_assertions)]
+                            "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
+                        ])
                         .allow_methods(Any),
                 )
                 .layer(tower_http::compression::CompressionLayer::new())
         )
-        .with_state(Arc::new(db));
+        .with_state(Arc::new(UsrState {
+            db,
+            new_orders_webhook: DiscordWebhook::new(config.new_orders_webhook)?,
+            order_updates_webhook: DiscordWebhook::new(config.order_updates_webhook)?,
+        }));
 
     default_provider()
         .install_default()
         .map_err(|_| anyhow::anyhow!("Failed to install ring CryptoProvider"))?;
-    let config = RustlsConfig::from_pem_file("cert.pem", "key.pem").await?;
 
     info!("Starting server");
-    let addr = SocketAddr::from(([0, 0, 0, 0], 443));
-    axum_server::bind_rustls(addr, config)
-        .serve(app.into_make_service())
-        .await
-        .map_err(Into::into)
+    #[cfg(not(debug_assertions))]
+    {
+        use axum_server::tls_rustls::RustlsConfig;
+        let config = RustlsConfig::from_pem_file("cert.pem", "key.pem").await?;
+        let addr = SocketAddr::from(([0, 0, 0, 0], 443));
+        axum_server::bind_rustls(addr, config)
+            .serve(app.into_make_service())
+            .await
+            .map_err(Into::into)
+    }
+    #[cfg(debug_assertions)]
+    {
+        let addr = SocketAddr::from(([0, 0, 0, 0], 80));
+        axum_server::bind(addr)
+            .serve(app.into_make_service())
+            .await
+            .map_err(Into::into)
+    }
 }

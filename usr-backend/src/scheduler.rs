@@ -5,8 +5,12 @@ use sea_orm::{sea_query::Table, ActiveModelTrait, ActiveValue, ColumnTrait, Conn
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
+use crate::UsrState;
+
 mod availability;
 mod team;
+
+pub use team::Team;
 
 #[derive(Deserialize)]
 struct PendingSchedule {
@@ -15,8 +19,8 @@ struct PendingSchedule {
 }
 
 #[axum::debug_handler]
-async fn add_schedule(State(db): State<Arc<DatabaseConnection>>, Json(pending_schedule): Json<PendingSchedule>) -> (StatusCode, &'static str) {
-    let result = db.transaction(|tx| Box::pin(async move {
+async fn add_schedule(State(state): State<Arc<UsrState>>, Json(pending_schedule): Json<PendingSchedule>) -> (StatusCode, &'static str) {
+    let result = state.db.transaction(|tx| Box::pin(async move {
         for time in pending_schedule.times {
             let active_model = availability::ActiveModel {
                 name: ActiveValue::Set(pending_schedule.name.clone()),
@@ -36,8 +40,8 @@ async fn add_schedule(State(db): State<Arc<DatabaseConnection>>, Json(pending_sc
 }
 
 #[axum::debug_handler]
-async fn del_schedule(State(db): State<Arc<DatabaseConnection>>, Json(pending_schedule): Json<PendingSchedule>) -> (StatusCode, &'static str) {
-    let result = db.transaction(|tx| Box::pin(async move {
+async fn del_schedule(State(state): State<Arc<UsrState>>, Json(pending_schedule): Json<PendingSchedule>) -> (StatusCode, &'static str) {
+    let result = state.db.transaction(|tx| Box::pin(async move {
         for time in pending_schedule.times {
             let active_model = availability::ActiveModel {
                 name: ActiveValue::Set(pending_schedule.name.clone()),
@@ -63,8 +67,8 @@ struct SetTeam {
 }
 
 #[axum::debug_handler]
-async fn set_team(State(db): State<Arc<DatabaseConnection>>, Json(set_team): Json<SetTeam>) -> (StatusCode, &'static str) {
-    let result = db.transaction(|tx| Box::pin(async move {
+async fn set_teams(State(state): State<Arc<UsrState>>, Json(set_team): Json<SetTeam>) -> (StatusCode, &'static str) {
+    let result = state.db.transaction(|tx| Box::pin(async move {
         team::Entity::delete_many().filter(team::Column::Name.eq(set_team.name.clone())).exec(tx).await?;
         for team in set_team.teams {
             let active_model = team::ActiveModel {
@@ -77,12 +81,27 @@ async fn set_team(State(db): State<Arc<DatabaseConnection>>, Json(set_team): Jso
     })).await;
     
     if let Err(e) = result {
-        error!("Failed to set team: {e}");
+        error!("Failed to set teams: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
         (StatusCode::OK, "")
     }
 }
+
+// #[axum::debug_handler]
+// async fn get_teams(State(db): State<Arc<DatabaseConnection>>, Path(name): Path<String>) -> Response {
+//     let result = team::Entity::find().filter(team::Column::Name.eq(name)).all(&*db).await;
+    
+//     match result {
+//         Ok(models) => {
+//             Json(models.into_iter().map(|model| model.team).collect::<Box<[team::Team]>>()).into_response()
+//         }
+//         Err(e) => {
+//             error!("Failed to get teams: {e}");
+//             (StatusCode::INTERNAL_SERVER_ERROR, "").into_response()
+//         }
+//     }
+// }
 
 #[derive(Serialize)]
 struct Schedule {
@@ -91,10 +110,10 @@ struct Schedule {
 }
 
 #[axum::debug_handler]
-async fn get_schedule(State(db): State<Arc<DatabaseConnection>>) -> Response {
+async fn get_schedule(State(state): State<Arc<UsrState>>) -> Response {
     let (availabilities, teams) = tokio::join!(
-        availability::Entity::find().all(&*db),
-        team::Entity::find().all(&*db),
+        availability::Entity::find().all(&state.db),
+        team::Entity::find().all(&state.db),
     );
 
     let availabilities = match availabilities {
@@ -115,9 +134,13 @@ async fn get_schedule(State(db): State<Arc<DatabaseConnection>>) -> Response {
 
     Json(Schedule {
         availabilities: {
-            let mut out: Box<[Vec<String>]> = std::iter::from_fn(|| Some(Vec::default())).take(7 * 24 * 4).collect();
+            let mut out: Box<[Vec<String>]> = std::iter::from_fn(|| Some(Vec::default())).take(7 * 8 * 4).collect();
             for model in availabilities {
-                out[model.time as usize].push(model.name);
+                let hour_of_day = model.time % 24 * 4;
+                if hour_of_day < 9 * 4 || hour_of_day >= 17 * 4 {
+                    continue;
+                }
+                out[model.time as usize - 9 * 4].push(model.name);
             }
             out
         },
@@ -134,12 +157,13 @@ async fn get_schedule(State(db): State<Arc<DatabaseConnection>>) -> Response {
     }).into_response()
 }
 
-pub fn router() -> Router<Arc<DatabaseConnection>> {
+pub fn router() -> Router<Arc<UsrState>> {
     Router::new()
     .route("/add/schedule", post(add_schedule))
     .route("/del/schedule", delete(del_schedule))
     .route("/get/schedule", get(get_schedule))
-    .route("/set/team", post(set_team))
+    .route("/set/team", post(set_teams))
+    // .route("/get/team/:name", get(get_teams))
 }
 
 pub async fn reset_tables(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {

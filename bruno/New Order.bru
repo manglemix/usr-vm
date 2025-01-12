@@ -1,0 +1,22 @@
+meta {
+  name: New Order
+  type: http
+  seq: 6
+}
+
+post {
+  url: http://127.0.0.1/api/manifest/new/order
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "name": "RTX 5090",
+    "count": 40,
+    "unit_cost": 1000.43,
+    "store_in": "MEB 2350",
+    "team": "Software",
+    "reason": "Machine learning... maybe"
+  }
+}

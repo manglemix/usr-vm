@@ -1,15 +1,22 @@
-use std::fmt::Display;
-
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::scheduler;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "teams")]
+#[sea_orm(table_name = "orders")]
 pub struct Model {
     #[sea_orm(primary_key)]
+    pub id: u32,
     pub name: String,
-    #[sea_orm(primary_key)]
-    pub team: Team
+    pub date: DateTime,
+    pub status: Status,
+    pub count: u32,
+    pub unit_cost: Decimal,
+    #[sea_orm(nullable)]
+    pub store_in: Option<String>,
+    pub team: scheduler::Team,
+    pub reason: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -20,23 +27,15 @@ impl ActiveModelBehavior for ActiveModel {}
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Deserialize, Hash, Copy, Serialize)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::N(1))")]
-pub enum Team {
-    #[sea_orm(string_value = "C")]
-    Software,
-    #[sea_orm(string_value = "M")]
-    Mechanical,
-    #[sea_orm(string_value = "E")]
-    Electrical,
+pub enum Status {
+    #[sea_orm(string_value = "N")]
+    New,
     #[sea_orm(string_value = "S")]
-    Systems,
-    #[sea_orm(string_value = "G")]
-    Social,
-    #[sea_orm(string_value = "A")]
-    Admin,
-}
-
-impl Display for Team {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
+    Submitted,
+    #[sea_orm(string_value = "F")]
+    Shipped,
+    #[sea_orm(string_value = "D")]
+    Delivered,
+    #[sea_orm(string_value = "I")]
+    InStorage,
 }
