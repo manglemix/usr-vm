@@ -98,15 +98,22 @@ async fn main() -> anyhow::Result<()> {
         )
         .layer(
             ServiceBuilder::new()
-                .layer(
-                    tower_http::cors::CorsLayer::new()
-                        .allow_origin([
+                .layer({
+                    let mut layer = tower_http::cors::CorsLayer::new();
+                    #[cfg(debug_assertions)]
+                    {
+                        layer = layer.allow_origin(Any);
+                    }
+                    #[cfg(not(debug_assertions))]
+                    {
+                        layer = layer.allow_origin(
                             "https://utahrobotics.github.io".parse::<HeaderValue>().unwrap(),
-                            #[cfg(debug_assertions)]
-                            "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
-                        ])
-                        .allow_methods(Any),
-                )
+                        );
+                    }
+                    layer
+                        .allow_headers(Any)
+                        .allow_methods(Any)
+                })
                 .layer(tower_http::compression::CompressionLayer::new())
         )
         .with_state(Arc::new(UsrState {

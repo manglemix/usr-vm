@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::scheduler;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
 #[sea_orm(table_name = "orders")]
 pub struct Model {
     #[sea_orm(primary_key)]
@@ -15,10 +15,11 @@ pub struct Model {
     pub status: Status,
     pub count: u32,
     pub unit_cost: Decimal,
-    #[sea_orm(nullable)]
-    pub store_in: Option<String>,
+    pub store_in: String,
     pub team: scheduler::Team,
     pub reason: String,
+    pub vendor: String,
+    pub link: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -44,10 +45,6 @@ pub enum Status {
 
 impl Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self == &Self::InStorage {
-            write!(f, "In Storage")
-        } else {
-            write!(f, "{:?}", self)
-        }
+        write!(f, "{:?}", self)
     }
 }

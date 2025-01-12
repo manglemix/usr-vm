@@ -4,3 +4,4 @@
 .reset-db
 *.sqlite
 /config.json
+/.env

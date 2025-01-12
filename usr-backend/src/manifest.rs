@@ -3,10 +3,7 @@ use std::
 ;
 
 use axum::{
-    extract::State,
-    http::StatusCode,
-    routing::{delete, post},
-    Json, Router,
+    extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, get, post}, Json, Router
 };
 use discord_webhook2::message::Message;
 use sea_orm::{
@@ -24,9 +21,11 @@ pub struct PendingOrder {
     pub name: String,
     pub count: u32,
     pub unit_cost: Decimal,
-    pub store_in: Option<String>,
+    pub store_in: String,
     pub team: scheduler::Team,
-    pub reason: String
+    pub reason: String,
+    pub vendor: String,
+    pub link: String,
 }
 
 #[axum::debug_handler]
@@ -35,8 +34,10 @@ async fn new_order(
     Json(pending_order): Json<PendingOrder>,
 ) -> (StatusCode, &'static str) {
     let webhook_msg = format!(
-        ">>> **New Order!**\n**Name:** {}\n**Count:** {}\n**Unit Cost:** ${}\n**Subtotal:** ${}\n**Team:** {}\n**Reason:** {}",
+        ">>> **New Order!**\n**Name:** {}\n**Vendor:** {}\n**Link:** {}\n**Count:** {}\n**Unit Cost:** ${}\n**Subtotal:** ${}\n**Team:** {}\n**Reason:** {}",
         pending_order.name,
+        pending_order.vendor,
+        pending_order.link,
         pending_order.count,
         pending_order.unit_cost,
         Decimal::from(pending_order.count) * pending_order.unit_cost,
@@ -53,6 +54,8 @@ async fn new_order(
         store_in: ActiveValue::Set(pending_order.store_in),
         team: ActiveValue::Set(pending_order.team),
         reason: ActiveValue::Set(pending_order.reason),
+        vendor: ActiveValue::Set(pending_order.vendor),
+        link: ActiveValue::Set(pending_order.link),
     };
     if let Err(e) = active_model.insert(&state.db).await {
         error!("Failed to create new order: {e}");
@@ -77,9 +80,11 @@ pub struct ChangeOrder {
     pub name: String,
     pub count: u32,
     pub unit_cost: Decimal,
-    pub store_in: Option<String>,
+    pub store_in: String,
     pub team: scheduler::Team,
-    pub reason: String
+    pub reason: String,
+    pub vendor: String,
+    pub link: String,
 }
 
 #[axum::debug_handler]
@@ -102,8 +107,10 @@ async fn change_order(
         }
     }
     let webhook_msg = format!(
-        ">>> ***Order Changed***\n**Name:** {}\n**Count:** {}\n**Unit Cost:** ${}\n**Subtotal:** ${}\n**Team:** {}\n**Reason:** {}",
+        ">>> ***Order Changed***\n**Name:** {}\n**Vendor:** {}\n**Link:** {}\n**Count:** {}\n**Unit Cost:** ${}\n**Subtotal:** ${}\n**Team:** {}\n**Reason:** {}",
         change_order.name,
+        change_order.vendor,
+        change_order.link,
         change_order.count,
         change_order.unit_cost,
         Decimal::from(change_order.count) * change_order.unit_cost,
@@ -120,6 +127,8 @@ async fn change_order(
         store_in: ActiveValue::Set(change_order.store_in),
         team: ActiveValue::Set(change_order.team),
         reason: ActiveValue::Set(change_order.reason),
+        vendor: ActiveValue::Set(change_order.vendor),
+        link: ActiveValue::Set(change_order.link),
     };
     if let Err(e) = active_model.update(&state.db).await {
         error!("Failed to change order: {e}");
@@ -207,12 +216,29 @@ async fn update_order(
             if model.status == update_order.status {
                 return (StatusCode::BAD_REQUEST, "Order is already in that state");
             }
-            webhook_msg = format!(
-                ">>> **Order Update!**\n**Name:** {}\n**Team:** {}\n**Status:** {}",
-                model.name,
-                model.team,
-                update_order.status
-            );
+            if update_order.status == order::Status::InStorage {
+                if model.store_in.is_empty() {
+                    webhook_msg = format!(
+                        ">>> **Order Complete!**\n**Name:** {}\n**Team:** {}",
+                        model.name,
+                        model.team
+                    );
+                } else {
+                    webhook_msg = format!(
+                        ">>> **Order Complete!**\n**Name:** {}\n**Team:** {}\n**Location:** {}",
+                        model.name,
+                        model.team,
+                        model.store_in
+                    );
+                }
+            } else {
+                webhook_msg = format!(
+                    ">>> **Order Update!**\n**Name:** {}\n**Team:** {}\n**Status:** {}",
+                    model.name,
+                    model.team,
+                    update_order.status
+                );
+            }
         }
         Ok(None) => {
             return (StatusCode::BAD_REQUEST, "Order not found");
@@ -233,6 +259,8 @@ async fn update_order(
         store_in: ActiveValue::NotSet,
         team: ActiveValue::NotSet,
         reason: ActiveValue::NotSet,
+        vendor: ActiveValue::NotSet,
+        link: ActiveValue::NotSet,
     };
     if let Err(e) = active_model.update(&state.db).await {
         error!("Failed to update order: {e}");
@@ -251,12 +279,30 @@ async fn update_order(
     }
 }
 
+#[axum::debug_handler]
+async fn get_orders(
+    State(state): State<Arc<UsrState>>,
+) -> Response {
+    let result = order::Entity::find().all(&state.db).await;
+
+    match result {
+        Ok(models) => {
+            Json(models).into_response()
+        }
+        Err(e) => {
+            error!("Failed to get orders: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "").into_response()
+        }
+    }
+}
+
 pub fn router() -> Router<Arc<UsrState>> {
     Router::new()
         .route("/new/order", post(new_order))
         .route("/change/order", post(change_order))
         .route("/del/order", delete(cancel_order))
         .route("/update/order", post(update_order))
+        .route("/list/order", get(get_orders))
 }
 
 pub async fn reset_tables(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
