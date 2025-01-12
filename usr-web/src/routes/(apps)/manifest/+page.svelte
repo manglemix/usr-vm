@@ -27,8 +27,8 @@
 		store_in: string;
 		team: 'Software' | 'Mechanical' | 'Electrical' | 'Systems' | 'Social' | 'Admin';
 		reason: string;
-        vendor: string;
-        link: string;
+		vendor: string;
+		link: string;
 	}
 	let orders: Order[] = $state([]);
 
@@ -59,41 +59,41 @@
 		refreshOrders();
 	}
 
-    let pending_order_name = $state("");
-    let pending_order_vendor = $state("");
-    let pending_order_link = $state("");
-    let pending_order_count = $state(0);
-    let pending_order_unit_cost = $state(0);
-    let pending_order_store_in: string = $state("");
-    let pending_order_team: Order['team'] | "" = $state("");
-    let pending_order_reason = $state("");
-    let updated_order_status: Order['status'] | "" = $state("")
+	let pending_order_name = $state('');
+	let pending_order_vendor = $state('');
+	let pending_order_link = $state('');
+	let pending_order_count = $state(0);
+	let pending_order_unit_cost = $state(0);
+	let pending_order_store_in: string = $state('');
+	let pending_order_team: Order['team'] | '' = $state('');
+	let pending_order_reason = $state('');
+	let updated_order_status: Order['status'] | '' = $state('');
 
-    function populatePending() {
-        if (selectedOrderId !== null) {
-            const order = orders[selectedOrderIndex];
-            pending_order_name = order.name;
-            pending_order_vendor = order.vendor;
-            pending_order_link = order.link;
-            pending_order_count = order.count;
-            pending_order_unit_cost = order.unit_cost as number;
-            pending_order_store_in = order.store_in;
-            pending_order_team = order.team;
-            pending_order_reason = order.reason;
-        }
-    }
+	function populatePending() {
+		if (selectedOrderId !== null) {
+			const order = orders[selectedOrderIndex];
+			pending_order_name = order.name;
+			pending_order_vendor = order.vendor;
+			pending_order_link = order.link;
+			pending_order_count = order.count;
+			pending_order_unit_cost = order.unit_cost as number;
+			pending_order_store_in = order.store_in;
+			pending_order_team = order.team;
+			pending_order_reason = order.reason;
+		}
+	}
 
-    function clearPending() {
-        pending_order_name = "";
-        pending_order_vendor = "";
-        pending_order_link = "";
-        pending_order_count = 0;
-        pending_order_unit_cost = 0;
-        pending_order_store_in = "";
-        pending_order_team = "";
-        pending_order_reason = "";
-        updated_order_status = "";
-    }
+	function clearPending() {
+		pending_order_name = '';
+		pending_order_vendor = '';
+		pending_order_link = '';
+		pending_order_count = 0;
+		pending_order_unit_cost = 0;
+		pending_order_store_in = '';
+		pending_order_team = '';
+		pending_order_reason = '';
+		updated_order_status = '';
+	}
 </script>
 
 <section class="w-min">
@@ -114,8 +114,8 @@
 			<tr>
 				<th>Name</th>
 				<th>Date</th>
-                <th>Vendor</th>
-                <th>Link</th>
+				<th>Vendor</th>
+				<th>Link</th>
 				<th>Status</th>
 				<th>Count</th>
 				<th>Unit Cost</th>
@@ -131,10 +131,10 @@
 					<tr
 						onclick={() => {
 							selectedOrderId = order.id;
-                            selectedOrderIndex = i;
-                            if (tabIndex == 1) {
-                                populatePending();
-                            }
+							selectedOrderIndex = i;
+							if (tabIndex == 1) {
+								populatePending();
+							}
 						}}
 						id={selectedOrderId === order.id ? 'selectedOrder' : ''}
 					>
@@ -168,9 +168,9 @@
 		<button
 			onclick={() => {
 				orderOperationOutput = '';
-                if (tabIndex === 1 && selectedOrderId !== null) {
-                    clearPending();
-                }
+				if (tabIndex === 1 && selectedOrderId !== null) {
+					clearPending();
+				}
 				tabIndex = 0;
 			}}
 			id={tabIndex === 0 ? 'selected-operation' : ''}
@@ -181,7 +181,7 @@
 			onclick={() => {
 				orderOperationOutput = '';
 				tabIndex = 1;
-                populatePending();
+				populatePending();
 			}}
 			id={tabIndex === 1 ? 'selected-operation' : ''}
 		>
@@ -191,7 +191,7 @@
 			onclick={() => {
 				orderOperationOutput = '';
 				tabIndex = 2;
-                updated_order_status = "";
+				updated_order_status = '';
 			}}
 			id={tabIndex === 2 ? 'selected-operation' : ''}
 		>
@@ -210,213 +210,257 @@
 	{#snippet selectAnOrder()}
 		<h2>Select an order</h2>
 	{/snippet}
-    <section class="flex flex-col">
+	<section class="flex flex-col">
 		{#if tabIndex === 0}
-            <label for="item-name">Item Name*</label>
-            <input type="text" id="item-name" bind:value={pending_order_name} placeholder="Item Name" />
+			<label for="item-name">Item Name*</label>
+			<input type="text" id="item-name" bind:value={pending_order_name} placeholder="Item Name" />
 
-            <label for="item-vendor">Vendor*</label>
-            <input type="text" id="item-vendor" bind:value={pending_order_vendor} placeholder="Vendor" />
+			<label for="item-vendor">Vendor*</label>
+			<input type="text" id="item-vendor" bind:value={pending_order_vendor} placeholder="Vendor" />
 
-            <label for="item-link">Link*</label>
-            <input type="url" id="item-link" bind:value={pending_order_link} placeholder="Link to the store" />
+			<label for="item-link">Link*</label>
+			<input
+				type="url"
+				id="item-link"
+				bind:value={pending_order_link}
+				placeholder="Link to the store"
+			/>
 
-            <label for="item-count">Count*</label>
-            <input type="number" id="item-count" bind:value={pending_order_count} />
+			<label for="item-count">Count*</label>
+			<input type="number" id="item-count" bind:value={pending_order_count} />
 
-            <label for="item-unit-cost">Unit Cost* (USD)</label>
-            <input type="number" id="item-unit-cost" bind:value={pending_order_unit_cost} step="0.01" />
+			<label for="item-unit-cost">Unit Cost* (USD)</label>
+			<input type="number" id="item-unit-cost" bind:value={pending_order_unit_cost} step="0.01" />
 
-            <label for="team">Team*</label>
-            <select id="team" bind:value={pending_order_team}>
-                <option value="" disabled selected>Select a team</option>
-                <option value="Software">Software</option>
-                <option value="Mechanical">Mechanical</option>
-                <option value="Electrical">Electrical</option>
-                <option value="Systems">Systems</option>
-                <option value="Social">Social</option>
-                <option value="Admin">Admin</option>
-            </select>
+			<label for="team">Team*</label>
+			<select id="team" bind:value={pending_order_team}>
+				<option value="" disabled selected>Select a team</option>
+				<option value="Software">Software</option>
+				<option value="Mechanical">Mechanical</option>
+				<option value="Electrical">Electrical</option>
+				<option value="Systems">Systems</option>
+				<option value="Social">Social</option>
+				<option value="Admin">Admin</option>
+			</select>
 
-            <label for="item-reason">Reason*</label>
-            <textarea id="item-reason" bind:value={pending_order_reason} placeholder="Reason">
-            </textarea>
+			<label for="item-reason">Reason*</label>
+			<textarea id="item-reason" bind:value={pending_order_reason} placeholder="Reason"> </textarea>
 
-            <label for="item-store-in">Store In</label>
-            <input type="text" id="item-store-in" bind:value={pending_order_store_in} placeholder="Where to leave the item" />
-        
-            <button onclick={async () => {
-                if (pending_order_name.trim() === '' || pending_order_vendor.trim() === '' || pending_order_link.trim() === '' || pending_order_count <= 0 || pending_order_unit_cost <= 0 || pending_order_team === undefined || pending_order_reason.trim() === '') {
-                    orderOperationOutput = 'Please fill in all the required fields';
-                    return;
-                }
-                const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/new/order`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        name: pending_order_name,
-                        vendor: pending_order_vendor,
-                        link: pending_order_link,
-                        count: pending_order_count,
-                        unit_cost: pending_order_unit_cost,
-                        team: pending_order_team,
-                        reason: pending_order_reason,
-                        store_in: pending_order_store_in
-                    })
-                });
-                if (response.ok) {
-                    orderOperationOutput = "";
-                    refreshOrders();
-                } else {
-                    orderOperationOutput = await response.text();
-                }
-            }}>
-                Submit
-            </button>
-            <output>{orderOperationOutput}</output>
-        {:else if tabIndex === 1}
-            {#if selectedOrderId === null}
-                {@render selectAnOrder()}
-            {:else}
-                <label for="item-name">Item Name*</label>
-                <input type="text" id="item-name" bind:value={pending_order_name} placeholder="Item Name" />
+			<label for="item-store-in">Store In</label>
+			<input
+				type="text"
+				id="item-store-in"
+				bind:value={pending_order_store_in}
+				placeholder="Where to leave the item"
+			/>
 
-                <label for="item-vendor">Vendor*</label>
-                <input type="text" id="item-vendor" bind:value={pending_order_vendor} placeholder="Vendor" />
+			<button
+				onclick={async () => {
+					if (
+						pending_order_name.trim() === '' ||
+						pending_order_vendor.trim() === '' ||
+						pending_order_link.trim() === '' ||
+						pending_order_count <= 0 ||
+						pending_order_unit_cost <= 0 ||
+						pending_order_team.length === 0 ||
+						pending_order_reason.trim() === ''
+					) {
+						orderOperationOutput = 'Please fill in all the required fields';
+						return;
+					}
+					const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/new/order`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json'
+						},
+						body: JSON.stringify({
+							name: pending_order_name,
+							vendor: pending_order_vendor,
+							link: pending_order_link,
+							count: pending_order_count,
+							unit_cost: pending_order_unit_cost,
+							team: pending_order_team,
+							reason: pending_order_reason,
+							store_in: pending_order_store_in
+						})
+					});
+					if (response.ok) {
+						orderOperationOutput = '';
+						refreshOrders();
+					} else {
+						orderOperationOutput = await response.text();
+					}
+				}}
+			>
+				Submit
+			</button>
+			<output>{orderOperationOutput}</output>
+		{:else if tabIndex === 1}
+			{#if selectedOrderId === null}
+				{@render selectAnOrder()}
+			{:else}
+				<label for="item-name">Item Name*</label>
+				<input type="text" id="item-name" bind:value={pending_order_name} placeholder="Item Name" />
 
-                <label for="item-link">Link*</label>
-                <input type="url" id="item-link" bind:value={pending_order_link} placeholder="Link to the store" />
+				<label for="item-vendor">Vendor*</label>
+				<input
+					type="text"
+					id="item-vendor"
+					bind:value={pending_order_vendor}
+					placeholder="Vendor"
+				/>
 
-                <label for="item-count">Count*</label>
-                <input type="number" id="item-count" bind:value={pending_order_count} />
+				<label for="item-link">Link*</label>
+				<input
+					type="url"
+					id="item-link"
+					bind:value={pending_order_link}
+					placeholder="Link to the store"
+				/>
 
-                <label for="item-unit-cost">Unit Cost* (USD)</label>
-                <input type="number" id="item-unit-cost" bind:value={pending_order_unit_cost} step="0.01" />
+				<label for="item-count">Count*</label>
+				<input type="number" id="item-count" bind:value={pending_order_count} />
 
-                <label for="order-team">Team*</label>
-                <select id="order-team" bind:value={pending_order_team}>
-                    <option value="" disabled selected>Select a team</option>
-                    <option value="Software">Software</option>
-                    <option value="Mechanical">Mechanical</option>
-                    <option value="Electrical">Electrical</option>
-                    <option value="Systems">Systems</option>
-                    <option value="Social">Social</option>
-                    <option value="Admin">Admin</option>
-                </select>
+				<label for="item-unit-cost">Unit Cost* (USD)</label>
+				<input type="number" id="item-unit-cost" bind:value={pending_order_unit_cost} step="0.01" />
 
-                <label for="item-reason">Reason*</label>
-                <textarea id="item-reason" bind:value={pending_order_reason} placeholder="Reason">
-                </textarea>
+				<label for="order-team">Team*</label>
+				<select id="order-team" bind:value={pending_order_team}>
+					<option value="" disabled selected>Select a team</option>
+					<option value="Software">Software</option>
+					<option value="Mechanical">Mechanical</option>
+					<option value="Electrical">Electrical</option>
+					<option value="Systems">Systems</option>
+					<option value="Social">Social</option>
+					<option value="Admin">Admin</option>
+				</select>
 
-                <label for="item-store-in">Store In</label>
-                <input type="text" id="item-store-in" bind:value={pending_order_store_in} placeholder="Where to leave the item" />
-            
-                <button onclick={async () => {
-                    if (pending_order_name.trim() === '' || pending_order_vendor.trim() === '' || pending_order_link.trim() === '' || pending_order_count <= 0 || pending_order_unit_cost <= 0 || pending_order_team.length === 0 || pending_order_reason.trim() === '') {
-                        orderOperationOutput = 'Please fill in all the required fields';
-                        return;
-                    }
-                    const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/change/order`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            id: selectedOrderId,
-                            name: pending_order_name,
-                            vendor: pending_order_vendor,
-                            link: pending_order_link,
-                            count: pending_order_count,
-                            unit_cost: pending_order_unit_cost,
-                            team: pending_order_team,
-                            reason: pending_order_reason,
-                            store_in: pending_order_store_in
-                        })
-                    });
-                    if (response.ok) {
-                        orderOperationOutput = "";
-                        refreshOrders();
-                    } else {
-                        orderOperationOutput = await response.text();
-                    }
-                }}>
-                    Change Order
-                </button>
-                <output>{orderOperationOutput}</output>
-            {/if}
-        {:else if tabIndex === 2}
-            {#if selectedOrderId === null}
-                {@render selectAnOrder()}
-            {:else}
-                <label for="order-status">Status*</label>
-                <select id="order-status" bind:value={updated_order_status}>
-                    <option value="" disabled selected>Select a status</option>
-                    <option value="New">New</option>
-                    <option value="Submitted">Submitted</option>
-                    <option value="Shipped">Shipped</option>
-                    <option value="Delivered">Delivered</option>
-                    <option value="InStorage">In Storage</option>
-                </select>
+				<label for="item-reason">Reason*</label>
+				<textarea id="item-reason" bind:value={pending_order_reason} placeholder="Reason">
+				</textarea>
 
-                <button
-                    onclick={async () => {
-                        if (updated_order_status.length === 0) {
-                            orderOperationOutput = 'Please select a status';
-                            return;
-                        }
-                        const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/update/order`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                id: selectedOrderId,
-                                status: updated_order_status
-                            })
-                        });
-                        if (response.ok) {
-                            orderOperationOutput = "";
-                            refreshOrders();
-                        } else {
-                            orderOperationOutput = await response.text();
-                        }
-                    }}
-                >
-                    Update Order
-                </button>
-                <output>{orderOperationOutput}</output>
-            {/if}
-        {:else if tabIndex === 3}
-            {#if selectedOrderId === null}
-                {@render selectAnOrder()}
-            {:else}
-                <button
-                    onclick={async () => {
-                        const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/del/order`, {
-                            method: 'DELETE',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                id: selectedOrderId
-                            })
-                        });
-                        if (response.ok) {
-                            orderOperationOutput = "";
-                            refreshOrders();
-                        } else {
-                            orderOperationOutput = await response.text();
-                        }
-                    }}
-                >
-                    Cancel Order
-                </button>
-                <output>{orderOperationOutput}</output>
-            {/if}
+				<label for="item-store-in">Store In</label>
+				<input
+					type="text"
+					id="item-store-in"
+					bind:value={pending_order_store_in}
+					placeholder="Where to leave the item"
+				/>
+
+				<button
+					onclick={async () => {
+						if (
+							pending_order_name.trim() === '' ||
+							pending_order_vendor.trim() === '' ||
+							pending_order_link.trim() === '' ||
+							pending_order_count <= 0 ||
+							pending_order_unit_cost <= 0 ||
+							pending_order_team.length === 0 ||
+							pending_order_reason.trim() === ''
+						) {
+							orderOperationOutput = 'Please fill in all the required fields';
+							return;
+						}
+						const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/change/order`, {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json'
+							},
+							body: JSON.stringify({
+								id: selectedOrderId,
+								name: pending_order_name,
+								vendor: pending_order_vendor,
+								link: pending_order_link,
+								count: pending_order_count,
+								unit_cost: pending_order_unit_cost,
+								team: pending_order_team,
+								reason: pending_order_reason,
+								store_in: pending_order_store_in
+							})
+						});
+						if (response.ok) {
+							orderOperationOutput = '';
+							refreshOrders();
+						} else {
+							orderOperationOutput = await response.text();
+						}
+					}}
+				>
+					Change Order
+				</button>
+				<output>{orderOperationOutput}</output>
+			{/if}
+		{:else if tabIndex === 2}
+			{#if selectedOrderId === null}
+				{@render selectAnOrder()}
+			{:else}
+				<label for="order-status">Status*</label>
+				<select id="order-status" bind:value={updated_order_status}>
+					<option value="" disabled selected>Select a status</option>
+					<option value="New">New</option>
+					<option value="Submitted">Submitted</option>
+					<option value="Shipped">Shipped</option>
+					<option value="Delivered">Delivered</option>
+					<option value="InStorage">In Storage</option>
+				</select>
+
+				<button
+					onclick={async () => {
+						if (updated_order_status.length === 0) {
+							orderOperationOutput = 'Please select a status';
+							return;
+						}
+						const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/update/order`, {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json'
+							},
+							body: JSON.stringify({
+								id: selectedOrderId,
+								status: updated_order_status
+							})
+						});
+						if (response.ok) {
+							orderOperationOutput = '';
+							refreshOrders();
+						} else {
+							orderOperationOutput = await response.text();
+						}
+					}}
+				>
+					Update Order
+				</button>
+				<output>{orderOperationOutput}</output>
+			{/if}
+		{:else if tabIndex === 3}
+			{#if selectedOrderId === null}
+				{@render selectAnOrder()}
+			{:else}
+				<button
+					onclick={async () => {
+						const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/del/order`, {
+							method: 'DELETE',
+							headers: {
+								'Content-Type': 'application/json'
+							},
+							body: JSON.stringify({
+								id: selectedOrderId
+							})
+						});
+						if (response.ok) {
+							orderOperationOutput = '';
+							refreshOrders();
+						} else {
+							orderOperationOutput = await response.text();
+						}
+					}}
+				>
+					Cancel Order
+				</button>
+				<output>{orderOperationOutput}</output>
+			{/if}
 		{/if}
-    </section>
+	</section>
 </section>
 
 <style>

@@ -2,7 +2,7 @@ use std::{
     io::{LineWriter, Write}, net::SocketAddr, path::Path, sync::Arc
 };
 
-use axum::{http::HeaderValue, routing::get, Router};
+use axum::{routing::get, Router};
 use discord_webhook2::webhook::DiscordWebhook;
 use parking_lot::Mutex;
 use rustls::crypto::ring::default_provider;
