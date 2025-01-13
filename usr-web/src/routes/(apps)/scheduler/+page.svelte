@@ -4,6 +4,7 @@
 	import { PUBLIC_API_ENDPOINT } from '$env/static/public';
 	import { TeamQuery, type Team } from '$lib';
 	import { parse } from 'svelte/compiler';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let name = $state('');
 
@@ -65,7 +66,7 @@
 		fetch(`${PUBLIC_API_ENDPOINT}/api/scheduler/set/team`, {
 			method: 'POST',
 			headers: {
-				'Content-Type': 'application/json',
+				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({
 				name,
@@ -176,40 +177,34 @@
 			});
 
 			if (deleting) {
-				const response = await fetch(
-					`${PUBLIC_API_ENDPOINT}/api/scheduler/del/schedule`,
-					{
-						method: 'DELETE',
-						headers: {
-							'Content-Type': 'application/json',
-						},
-						body
-					}
-				);
+				const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/scheduler/del/schedule`, {
+					method: 'DELETE',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body
+				});
 				if (response.ok) {
 					for (const i of times) {
 						availabilities[i] = availabilities[i].filter((n) => n !== name);
 					}
-					availabilities = availabilities.map(a => a);
+					availabilities = availabilities.map((a) => a);
 				}
 			} else {
-				const response = await fetch(
-					`${PUBLIC_API_ENDPOINT}/api/scheduler/add/schedule`,
-					{
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-						},
-						body
-					}
-				);
+				const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/scheduler/add/schedule`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body
+				});
 				if (response.ok) {
 					for (const i of times) {
 						if (!availabilities[i].includes(name)) {
 							availabilities[i].push(name);
 						}
 					}
-					availabilities = availabilities.map(a => a);
+					availabilities = availabilities.map((a) => a);
 				}
 			}
 			updateDrag = false;
@@ -251,43 +246,49 @@
 	}
 
 	function timeString(y: number) {
-		const hour = Math.floor(y/4)+9;
+		const hour = Math.floor(y / 4) + 9;
 		let hourCorrected;
 		if (hour === 12) {
 			hourCorrected = 12;
 		} else {
 			hourCorrected = hour % 12;
 		}
-		const minutes = y % 4 * 15;
-		return `${hourCorrected}:${minutes === 0 ? "00" : minutes}${hour < 12 ? 'a' : 'p'}`;
+		const minutes = (y % 4) * 15;
+		return `${hourCorrected}:${minutes === 0 ? '00' : minutes}${hour < 12 ? 'a' : 'p'}`;
 	}
 
 	let advancedFilterQuery = $state('');
 	let advancedFilterParseError = $state('');
-	let filterMaxCount = $state(0);
-	let filterFn: (x: number, y: number) => number = $state(() => 0);
+	let maxPresent = $state(new SvelteSet<string>());
+	let filterFn: (x: number, y: number) => Set<string> = $state(() => new Set());
+	let selectedCellPeople: Set<string> | null = $state(null);
+	let selectedCell: [number, number] | null = $state(null);
 
 	function filterFnFromQuery(query: TeamQuery) {
-		const names = new Set(Object.values(teams).flat());
-		filterMaxCount = query.evaluate(teams, names).size;
+		untrack(() => {
+			maxPresent.clear();
+		});
 
 		filterFn = (x, y) => {
 			const newTeams: Record<string, string[]> = {};
 			const newNames: Set<string> = new Set();
+
 			for (const [team, names] of Object.entries(teams)) {
-				const newSubteam = names.filter((name) => availabilities[y + x * 32]?.includes(name) ?? false);
+				const newSubteam = names.filter(
+					(name) => availabilities[y + x * 32]?.includes(name) ?? false
+				);
 				newTeams[team] = newSubteam;
 				for (const name of newSubteam) {
 					newNames.add(name);
 				}
 			}
-			try {
-				return query.evaluate(newTeams, newNames).size;
-			} catch (_) {
-				// An error here probably means that a required person was not available at this time
-				return 0;
-			}
-		}
+
+			const out = query.evaluate(newTeams, newNames);
+			untrack(() => {
+				maxPresent = new SvelteSet(maxPresent.union(out));
+			});
+			return out;
+		};
 	}
 
 	let simpleQuerySoftware = $state(false);
@@ -321,9 +322,9 @@
 			teams.push('Admin');
 		}
 		if (teams.length === 0) {
-			filterFnFromQuery(TeamQuery.parse('Software or Mechanical or Electrical or Systems or Social or Admin'));
-		} else if (teams.length === 1) {
-			filterFnFromQuery(TeamQuery.parse(`${teams[0]} and *`));
+			filterFnFromQuery(
+				TeamQuery.parse('Software or Mechanical or Electrical or Systems or Social or Admin')
+			);
 		} else {
 			filterFnFromQuery(TeamQuery.parse(teams.join(' or ')));
 		}
@@ -342,8 +343,9 @@
 		</button>
 		<button
 			onclick={() => {
-				refreshSchedule();
 				tabIndex = 1;
+				selectedCellPeople = null;
+				selectedCell = null;
 			}}
 			id={tabIndex === 1 ? 'selected-operation' : ''}
 		>
@@ -351,8 +353,13 @@
 		</button>
 		<button
 			onclick={() => {
-				refreshSchedule();
+				if (tabIndex === 1) {
+					filterFn = () => new Set();
+					maxPresent.clear();
+				}
 				advancedFilterParseError = '';
+				selectedCellPeople = null;
+				selectedCell = null;
 				tabIndex = 2;
 			}}
 			id={tabIndex === 2 ? 'selected-operation' : ''}
@@ -363,7 +370,7 @@
 	<section class="flex flex-col">
 		{#if tabIndex === 0}
 			<input bind:value={name} placeholder="Your Name" />
-			
+
 			<section class="flex flex-col">
 				<label>
 					<input type="checkbox" bind:checked={inSoftware} disabled={name.length === 0} />
@@ -419,17 +426,25 @@
 			</section>
 		{:else if tabIndex === 2}
 			<input bind:value={advancedFilterQuery} placeholder="Advanced Filter Query" />
-			<button onclick={() => {
-				try {
-					filterFnFromQuery(TeamQuery.parse(advancedFilterQuery));
-				} catch (e) {
-					if (e instanceof Error) {
-						advancedFilterParseError = e.message;
-					} else {
-						advancedFilterParseError = e as string;
+			<button
+				onclick={() => {
+					try {
+						const query = TeamQuery.parse(advancedFilterQuery);
+						const failedName = query.verifyNames(new Set(Object.values(teams).flat()));
+						if (failedName !== null) {
+							advancedFilterParseError = `"${failedName}" not found in any team`;
+							return;
+						}
+						filterFnFromQuery(query);
+					} catch (e) {
+						if (e instanceof Error) {
+							advancedFilterParseError = e.message;
+						} else {
+							advancedFilterParseError = e as string;
+						}
 					}
-				}
-			}}>
+				}}
+			>
 				Execute
 			</button>
 			<output>{advancedFilterParseError}</output>
@@ -452,28 +467,42 @@
 				<td>{timeString(y)}</td>
 				{#each DAYS as _, x}
 					{#if tabIndex === 0}
-						<td class="schedule-cell unscrollable" style:--p={isUpdateCellGreen(x, y) ? "100%" : "0%"} onpointerdown={(event) => {
-							if (name === '') {
-								return;
-							}
-							event.currentTarget.releasePointerCapture(event.pointerId);
-							deleting = isPositionInsideAvailabilities(x, y, name);
-							updateDrag = true;
-							dragStartX = x;
-							dragStartY = y;
-							dragEndX = x;
-							dragEndY = y;
-						}} onpointerenter={(event) => {
-							if (updateDrag) {
-								event.stopPropagation();
+						<td
+							class="schedule-cell unscrollable"
+							style:--p={isUpdateCellGreen(x, y) ? '100%' : '0%'}
+							onpointerdown={(event) => {
+								if (name === '') {
+									return;
+								}
+								event.currentTarget.releasePointerCapture(event.pointerId);
+								deleting = isPositionInsideAvailabilities(x, y, name);
+								updateDrag = true;
+								dragStartX = x;
+								dragStartY = y;
 								dragEndX = x;
 								dragEndY = y;
-							}
-						}}>
+							}}
+							onpointerenter={(event) => {
+								if (updateDrag) {
+									event.stopPropagation();
+									dragEndX = x;
+									dragEndY = y;
+								}
+							}}
+						>
 						</td>
 					{:else}
-						{#snippet scheduleCell(count: number)}
-							<td class="schedule-cell" style:--p={`${filterMaxCount === 0 ? 0 : count / filterMaxCount * 100}%`} title={`${count} / ${filterMaxCount === 0 ? 1 : filterMaxCount}`}>
+						{#snippet scheduleCell(people: Set<string>)}
+							<td
+								class="schedule-cell"
+								style:--p={`${maxPresent.size === 0 ? 0 : (people.size / maxPresent.size) * 100}%`}
+								title={`${people.size} / ${maxPresent.size === 0 ? 1 : maxPresent.size}`}
+								onpointerenter={() => {
+									selectedCellPeople = people;
+									selectedCell = [x, y];
+								}}
+								id={selectedCell !== null && selectedCell[0] === x && selectedCell[1] === y ? 'selected-cell' : ''}
+							>
 							</td>
 						{/snippet}
 						{@render scheduleCell(filterFn(x, y))}
@@ -483,6 +512,20 @@
 		{/each}
 	</tbody>
 </table>
+
+{#if tabIndex !== 0}
+	<section class="flex flex-row flex-wrap gap-4">
+		{#if selectedCellPeople !== null}
+			{#each selectedCellPeople as name}
+				<div>{name}</div>
+			{/each}
+		{:else}
+			{#each maxPresent as name}
+				<div>{name}</div>
+			{/each}
+		{/if}
+	</section>
+{/if}
 
 <style>
 	th {
@@ -519,5 +562,7 @@
 	#schedule-operations #selected-operation {
 		background-color: lightgray;
 	}
-	
+	#selected-cell {
+		background-color: aqua;
+	}
 </style>
