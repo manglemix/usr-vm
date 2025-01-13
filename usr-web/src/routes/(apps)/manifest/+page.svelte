@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { PUBLIC_API_ENDPOINT } from '$env/static/public';
+	import type { Team } from '$lib';
 
 	let hideInStorage = $state(false);
 	let selectedOrderId: number | null = $state(null);
@@ -25,7 +26,7 @@
 		count: number;
 		unit_cost: number | string;
 		store_in: string;
-		team: 'Software' | 'Mechanical' | 'Electrical' | 'Systems' | 'Social' | 'Admin';
+		team: Team;
 		reason: string;
 		vendor: string;
 		link: string;
@@ -65,7 +66,7 @@
 	let pending_order_count = $state(0);
 	let pending_order_unit_cost = $state(0);
 	let pending_order_store_in: string = $state('');
-	let pending_order_team: Order['team'] | '' = $state('');
+	let pending_order_team: Team | '' = $state('');
 	let pending_order_reason = $state('');
 	let updated_order_status: Order['status'] | '' = $state('');
 

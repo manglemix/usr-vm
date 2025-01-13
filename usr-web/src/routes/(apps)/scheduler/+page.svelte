@@ -2,6 +2,8 @@
 	import { browser } from '$app/environment';
 	import { untrack } from 'svelte';
 	import { PUBLIC_API_ENDPOINT } from '$env/static/public';
+	import { TeamQuery, type Team } from '$lib';
+	import { parse } from 'svelte/compiler';
 
 	let name = $state('');
 
@@ -41,7 +43,7 @@
 		if (name.length === 0) {
 			return;
 		}
-		const teams = [];
+		const teams: Team[] = [];
 		if (inSoftware) {
 			teams.push('Software');
 		}
@@ -153,11 +155,10 @@
 
 	if (browser) {
 		refreshSchedule();
-		window.addEventListener('mouseup', async () => {
+		window.addEventListener('pointerup', async () => {
 			if (!updateDrag) {
 				return;
 			}
-			updateDrag = false;
 			if (name.length === 0) {
 				return;
 			}
@@ -211,6 +212,7 @@
 					availabilities = availabilities.map(a => a);
 				}
 			}
+			updateDrag = false;
 		});
 	}
 
@@ -259,51 +261,74 @@
 		const minutes = y % 4 * 15;
 		return `${hourCorrected}:${minutes === 0 ? "00" : minutes}${hour < 12 ? 'a' : 'p'}`;
 	}
-</script>
 
-<table>
-	<thead>
-		<tr>
-			<th></th>
-			{#each DAYS as day}
-				<th>{day}</th>
-			{/each}
-		</tr>
-	</thead>
-	<tbody>
-		{#each { length: 32 } as _, y}
-			<tr>
-				<td>{timeString(y)}</td>
-				{#each DAYS as _, x}
-					{#if tabIndex === 0}
-						<td class="schedule-cell" style:--p={isUpdateCellGreen(x, y) ? "100%" : "0%"} onmousedown={(event) => {
-							if (name === '') {
-								return;
-							}
-							event.stopPropagation();
-							deleting = isPositionInsideAvailabilities(x, y, name);
-							updateDrag = true;
-							dragStartX = x;
-							dragStartY = y;
-							dragEndX = x;
-							dragEndY = y;
-						}} onmouseenter={(event) => {
-							if (updateDrag) {
-								event.stopPropagation();
-								dragEndX = x;
-								dragEndY = y;
-							}
-						}}>
-						</td>
-					{:else}
-						<td class="schedule-cell" style:--p={`0%`}>
-						</td>
-					{/if}
-				{/each}
-			</tr>
-		{/each}
-	</tbody>
-</table>
+	let advancedFilterQuery = $state('');
+	let advancedFilterParseError = $state('');
+	let filterMaxCount = $state(0);
+	let filterFn: (x: number, y: number) => number = $state(() => 0);
+
+	function filterFnFromQuery(query: TeamQuery) {
+		const names = new Set(Object.values(teams).flat());
+		filterMaxCount = query.evaluate(teams, names).size;
+
+		filterFn = (x, y) => {
+			const newTeams: Record<string, string[]> = {};
+			const newNames: Set<string> = new Set();
+			for (const [team, names] of Object.entries(teams)) {
+				const newSubteam = names.filter((name) => availabilities[y + x * 32]?.includes(name) ?? false);
+				newTeams[team] = newSubteam;
+				for (const name of newSubteam) {
+					newNames.add(name);
+				}
+			}
+			try {
+				return query.evaluate(newTeams, newNames).size;
+			} catch (_) {
+				// An error here probably means that a required person was not available at this time
+				return 0;
+			}
+		}
+	}
+
+	let simpleQuerySoftware = $state(false);
+	let simpleQueryMechanical = $state(false);
+	let simpleQueryElectrical = $state(false);
+	let simpleQuerySystems = $state(false);
+	let simpleQuerySocial = $state(false);
+	let simpleQueryAdmin = $state(false);
+
+	$effect(() => {
+		if (tabIndex !== 1) {
+			return;
+		}
+		const teams = [];
+		if (simpleQuerySoftware) {
+			teams.push('Software');
+		}
+		if (simpleQueryMechanical) {
+			teams.push('Mechanical');
+		}
+		if (simpleQueryElectrical) {
+			teams.push('Electrical');
+		}
+		if (simpleQuerySystems) {
+			teams.push('Systems');
+		}
+		if (simpleQuerySocial) {
+			teams.push('Social');
+		}
+		if (simpleQueryAdmin) {
+			teams.push('Admin');
+		}
+		if (teams.length === 0) {
+			filterFnFromQuery(TeamQuery.parse('Software or Mechanical or Electrical or Systems or Social or Admin'));
+		} else if (teams.length === 1) {
+			filterFnFromQuery(TeamQuery.parse(`${teams[0]} and *`));
+		} else {
+			filterFnFromQuery(TeamQuery.parse(teams.join(' or ')));
+		}
+	});
+</script>
 
 <section id="schedule-operations">
 	<div id="schedule-tabs" class="flex flex-row">
@@ -322,7 +347,17 @@
 			}}
 			id={tabIndex === 1 ? 'selected-operation' : ''}
 		>
-			Filter
+			Simple Filter
+		</button>
+		<button
+			onclick={() => {
+				refreshSchedule();
+				advancedFilterParseError = '';
+				tabIndex = 2;
+			}}
+			id={tabIndex === 2 ? 'selected-operation' : ''}
+		>
+			Advanced Filter
 		</button>
 	</div>
 	<section class="flex flex-col">
@@ -356,9 +391,98 @@
 				</label>
 			</section>
 		{:else if tabIndex === 1}
+			<section class="flex flex-col">
+				<label>
+					<input type="checkbox" bind:checked={simpleQuerySoftware} />
+					Software
+				</label>
+				<label>
+					<input type="checkbox" bind:checked={simpleQueryMechanical} />
+					Mechanical
+				</label>
+				<label>
+					<input type="checkbox" bind:checked={simpleQueryElectrical} />
+					Electrical
+				</label>
+				<label>
+					<input type="checkbox" bind:checked={simpleQuerySystems} />
+					Systems
+				</label>
+				<label>
+					<input type="checkbox" bind:checked={simpleQuerySocial} />
+					Social
+				</label>
+				<label>
+					<input type="checkbox" bind:checked={simpleQueryAdmin} />
+					Admin
+				</label>
+			</section>
+		{:else if tabIndex === 2}
+			<input bind:value={advancedFilterQuery} placeholder="Advanced Filter Query" />
+			<button onclick={() => {
+				try {
+					filterFnFromQuery(TeamQuery.parse(advancedFilterQuery));
+				} catch (e) {
+					if (e instanceof Error) {
+						advancedFilterParseError = e.message;
+					} else {
+						advancedFilterParseError = e as string;
+					}
+				}
+			}}>
+				Execute
+			</button>
+			<output>{advancedFilterParseError}</output>
 		{/if}
 	</section>
 </section>
+
+<table>
+	<thead>
+		<tr>
+			<th></th>
+			{#each DAYS as day}
+				<th>{day}</th>
+			{/each}
+		</tr>
+	</thead>
+	<tbody>
+		{#each { length: 32 } as _, y}
+			<tr>
+				<td>{timeString(y)}</td>
+				{#each DAYS as _, x}
+					{#if tabIndex === 0}
+						<td class="schedule-cell unscrollable" style:--p={isUpdateCellGreen(x, y) ? "100%" : "0%"} onpointerdown={(event) => {
+							if (name === '') {
+								return;
+							}
+							event.currentTarget.releasePointerCapture(event.pointerId);
+							deleting = isPositionInsideAvailabilities(x, y, name);
+							updateDrag = true;
+							dragStartX = x;
+							dragStartY = y;
+							dragEndX = x;
+							dragEndY = y;
+						}} onpointerenter={(event) => {
+							if (updateDrag) {
+								event.stopPropagation();
+								dragEndX = x;
+								dragEndY = y;
+							}
+						}}>
+						</td>
+					{:else}
+						{#snippet scheduleCell(count: number)}
+							<td class="schedule-cell" style:--p={`${filterMaxCount === 0 ? 0 : count / filterMaxCount * 100}%`} title={`${count} / ${filterMaxCount === 0 ? 1 : filterMaxCount}`}>
+							</td>
+						{/snippet}
+						{@render scheduleCell(filterFn(x, y))}
+					{/if}
+				{/each}
+			</tr>
+		{/each}
+	</tbody>
+</table>
 
 <style>
 	th {
@@ -369,6 +493,9 @@
 	.schedule-cell {
 		background-color: color-mix(in oklab, lightgray, lightgreen var(--p));
 		padding: 0;
+	}
+	.unscrollable {
+		touch-action: none;
 	}
 	td {
 		background-color: lightgray;
@@ -392,4 +519,5 @@
 	#schedule-operations #selected-operation {
 		background-color: lightgray;
 	}
+	
 </style>
