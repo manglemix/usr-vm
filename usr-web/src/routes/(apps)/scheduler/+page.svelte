@@ -331,6 +331,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>USR Scheduler</title>
+</svelte:head>
+
 <section id="schedule-operations">
 	<div id="schedule-tabs" class="flex flex-row">
 		<button
