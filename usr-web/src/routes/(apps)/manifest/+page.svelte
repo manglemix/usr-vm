@@ -97,7 +97,11 @@
 	}
 </script>
 
-<section class="w-min">
+<svelte:head>
+	<title>USR Manifest</title>
+</svelte:head>
+
+<section class="w-min m-4">
 	<div class="flex flex-row justify-between">
 		<label>
 			<input type="checkbox" bind:checked={hideInStorage} />
@@ -164,7 +168,7 @@
 	</table>
 </section>
 
-<section id="order-operations">
+<section id="order-operations" class="mt-4">
 	<div id="order-tabs" class="flex flex-row">
 		<button
 			onclick={() => {
@@ -211,50 +215,69 @@
 	{#snippet selectAnOrder()}
 		<h2>Select an order</h2>
 	{/snippet}
-	<section class="flex flex-col">
+	{#snippet input()} 
+	<label>
+		Item Name*
+		<input type="text" bind:value={pending_order_name} placeholder="Item Name" />
+	</label>
+
+	<label>
+		Vendor*
+		<input type="text" bind:value={pending_order_vendor} placeholder="Vendor" />
+	</label>
+
+	<label>
+		Link*
+		<input
+			type="url"
+			bind:value={pending_order_link}
+			placeholder="Link to the store"
+		/>
+	</label>
+
+	<div class="flex flex-row justify-around">
+		<label>
+			Count*
+			<input type="number" bind:value={pending_order_count} />
+		</label>
+		
+		<label>
+			Unit Cost* (USD)
+			<input type="number" bind:value={pending_order_unit_cost} step="0.01" />
+		</label>
+	</div>
+
+	<label>
+		Team*
+		<select id="team" bind:value={pending_order_team}>
+			<option value="" disabled selected>Select a team</option>
+			<option value="Software">Software</option>
+			<option value="Mechanical">Mechanical</option>
+			<option value="Electrical">Electrical</option>
+			<option value="Systems">Systems</option>
+			<option value="Social">Social</option>
+			<option value="Admin">Admin</option>
+		</select>
+	</label>
+
+	<label>
+		Reason*
+		<textarea bind:value={pending_order_reason} placeholder="Reason"></textarea>
+	</label>
+
+	<label>
+		Store In
+		<input
+			type="text"
+			bind:value={pending_order_store_in}
+			placeholder="Where to leave the item"
+		/>
+	</label>
+	{/snippet}
+	<section id="order-operations-content" class="flex flex-col gap-4 p-4">
 		{#if tabIndex === 0}
-			<label for="item-name">Item Name*</label>
-			<input type="text" id="item-name" bind:value={pending_order_name} placeholder="Item Name" />
-
-			<label for="item-vendor">Vendor*</label>
-			<input type="text" id="item-vendor" bind:value={pending_order_vendor} placeholder="Vendor" />
-
-			<label for="item-link">Link*</label>
-			<input
-				type="url"
-				id="item-link"
-				bind:value={pending_order_link}
-				placeholder="Link to the store"
-			/>
-
-			<label for="item-count">Count*</label>
-			<input type="number" id="item-count" bind:value={pending_order_count} />
-
-			<label for="item-unit-cost">Unit Cost* (USD)</label>
-			<input type="number" id="item-unit-cost" bind:value={pending_order_unit_cost} step="0.01" />
-
-			<label for="team">Team*</label>
-			<select id="team" bind:value={pending_order_team}>
-				<option value="" disabled selected>Select a team</option>
-				<option value="Software">Software</option>
-				<option value="Mechanical">Mechanical</option>
-				<option value="Electrical">Electrical</option>
-				<option value="Systems">Systems</option>
-				<option value="Social">Social</option>
-				<option value="Admin">Admin</option>
-			</select>
-
-			<label for="item-reason">Reason*</label>
-			<textarea id="item-reason" bind:value={pending_order_reason} placeholder="Reason"> </textarea>
-
-			<label for="item-store-in">Store In</label>
-			<input
-				type="text"
-				id="item-store-in"
-				bind:value={pending_order_store_in}
-				placeholder="Where to leave the item"
-			/>
-
+			{@render input()}
+			
 			<button
 				onclick={async () => {
 					if (
@@ -300,54 +323,7 @@
 			{#if selectedOrderId === null}
 				{@render selectAnOrder()}
 			{:else}
-				<label for="item-name">Item Name*</label>
-				<input type="text" id="item-name" bind:value={pending_order_name} placeholder="Item Name" />
-
-				<label for="item-vendor">Vendor*</label>
-				<input
-					type="text"
-					id="item-vendor"
-					bind:value={pending_order_vendor}
-					placeholder="Vendor"
-				/>
-
-				<label for="item-link">Link*</label>
-				<input
-					type="url"
-					id="item-link"
-					bind:value={pending_order_link}
-					placeholder="Link to the store"
-				/>
-
-				<label for="item-count">Count*</label>
-				<input type="number" id="item-count" bind:value={pending_order_count} />
-
-				<label for="item-unit-cost">Unit Cost* (USD)</label>
-				<input type="number" id="item-unit-cost" bind:value={pending_order_unit_cost} step="0.01" />
-
-				<label for="order-team">Team*</label>
-				<select id="order-team" bind:value={pending_order_team}>
-					<option value="" disabled selected>Select a team</option>
-					<option value="Software">Software</option>
-					<option value="Mechanical">Mechanical</option>
-					<option value="Electrical">Electrical</option>
-					<option value="Systems">Systems</option>
-					<option value="Social">Social</option>
-					<option value="Admin">Admin</option>
-				</select>
-
-				<label for="item-reason">Reason*</label>
-				<textarea id="item-reason" bind:value={pending_order_reason} placeholder="Reason">
-				</textarea>
-
-				<label for="item-store-in">Store In</label>
-				<input
-					type="text"
-					id="item-store-in"
-					bind:value={pending_order_store_in}
-					placeholder="Where to leave the item"
-				/>
-
+				{@render input()}
 				<button
 					onclick={async () => {
 						if (
@@ -502,5 +478,17 @@
 	}
 	#order-operations #selected-operation {
 		background-color: lightgray;
+	}
+	#order-operations-content > label {
+		display: flex;
+		flex-direction: column;
+	}
+	#order-operations-content {
+		background-color: lightgray;
+	}
+	#order-operations-content > button {
+		background-color: darkgray;
+		padding: 0.2rem;
+		border: 1px solid black;
 	}
 </style>

@@ -1,11 +1,11 @@
-use std::
-    sync::Arc
+use std::{collections::{hash_map::Entry, HashMap}, sync::{Arc, LazyLock}, time::Instant}
 ;
 
 use axum::{
     extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, get, post}, Json, Router
 };
 use discord_webhook2::message::Message;
+use parking_lot::Mutex;
 use sea_orm::{
     prelude::Decimal, sea_query::Table, sqlx::types::chrono::Local, ActiveModelTrait, ActiveValue, ConnectionTrait, DatabaseConnection, EntityTrait, Schema
 };
@@ -15,6 +15,14 @@ use tracing::error;
 use crate::{scheduler, UsrState};
 
 mod order;
+struct BatchedTask {
+    queue: HashMap<u32, String>,
+    deadline: Option<Instant>,
+}
+static BATCHED: LazyLock<Mutex<BatchedTask>> = LazyLock::new(|| Mutex::new(BatchedTask {
+    queue: HashMap::new(),
+    deadline: None,
+}));
 
 #[derive(Deserialize)]
 pub struct PendingOrder {
@@ -57,20 +65,67 @@ async fn new_order(
         vendor: ActiveValue::Set(pending_order.vendor),
         link: ActiveValue::Set(pending_order.link),
     };
-    if let Err(e) = active_model.insert(&state.db).await {
-        error!("Failed to create new order: {e}");
-        (StatusCode::INTERNAL_SERVER_ERROR, "")
-    } else {
-        tokio::spawn(async move {
-            if let Err(e) = state
-                .new_orders_webhook
-                .send(&Message::new(|message| message.content(webhook_msg)))
-                .await
-            {
-                error!("Failed to trigger new-order webhook: {e}");
+    match active_model.insert(&state.db).await {
+        Ok(m) => {    
+            let mut guard = BATCHED.lock();
+            guard.queue.insert(m.id, webhook_msg);
+            let was_none = guard.deadline.is_none();
+            guard.deadline = Some(Instant::now() + std::time::Duration::from_secs(60 * 5));
+    
+            if was_none {
+                drop(guard);
+    
+                tokio::spawn(async move {
+                    loop {
+                        let deadline = BATCHED.lock().deadline.unwrap();
+                        tokio::time::sleep_until(deadline.into()).await;
+                        let queue;
+                        {
+                            let mut guard = BATCHED.lock();
+                            if guard.deadline.unwrap() != deadline {
+                                continue;
+                            }
+                            let replacement = HashMap::with_capacity(guard.queue.capacity());
+                            queue = std::mem::replace(&mut guard.queue, replacement);
+                        }
+                        let mut running = String::new();
+                        for (_, msg) in queue {
+                            if running.len() + msg.len() + 1 < 2000 {
+                                running.push_str(&msg);
+                                running.push_str("\n");
+                            } else {
+                                if let Err(e) = state
+                                    .new_orders_webhook
+                                    .send(&Message::new(|message| message.content(running)))
+                                    .await
+                                {
+                                    error!("Failed to trigger new-order webhook: {e}");
+                                }
+                                running = msg;
+                            }
+                        }
+                        if let Err(e) = state
+                            .new_orders_webhook
+                            .send(&Message::new(|message| message.content(running)))
+                            .await
+                        {
+                            error!("Failed to trigger new-order webhook: {e}");
+                        }
+                        let mut guard = BATCHED.lock();
+                        if guard.queue.is_empty() {
+                            guard.deadline = None;
+                            break;
+                        }
+                    }
+                });
             }
-        });
-        (StatusCode::OK, "")
+    
+            (StatusCode::OK, "")
+        }
+        Err(e) => {
+            error!("Failed to create new order: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "")
+        }
     }
 }
 
@@ -134,15 +189,24 @@ async fn change_order(
         error!("Failed to change order: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
-        tokio::spawn(async move {
-            if let Err(e) = state
-                .new_orders_webhook
-                .send(&Message::new(|message| message.content(webhook_msg)))
-                .await
-            {
-                error!("Failed to trigger new-order webhook: {e}");
+        let mut guard = BATCHED.lock();
+        match guard.queue.entry(change_order.id) {
+            Entry::Occupied(mut entry) => {
+                entry.insert(webhook_msg);
             }
-        });
+            Entry::Vacant(_) => {
+                tokio::spawn(async move {
+                    if let Err(e) = state
+                        .new_orders_webhook
+                        .send(&Message::new(|message| message.content(webhook_msg)))
+                        .await
+                    {
+                        error!("Failed to trigger new-order webhook: {e}");
+                    }
+                });
+            }
+        }
+        
         (StatusCode::OK, "")
     }
 }

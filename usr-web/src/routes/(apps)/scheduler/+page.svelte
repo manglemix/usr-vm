@@ -335,7 +335,7 @@
 	<title>USR Scheduler</title>
 </svelte:head>
 
-<section id="schedule-operations">
+<section id="schedule-operations" class="ml-4 mr-4 mb-4">
 	<div id="schedule-tabs" class="flex flex-row">
 		<button
 			onclick={() => {
@@ -355,23 +355,8 @@
 		>
 			Simple Filter
 		</button>
-		<button
-			onclick={() => {
-				if (tabIndex === 1) {
-					filterFn = () => new Set();
-					maxPresent.clear();
-				}
-				advancedFilterParseError = '';
-				selectedCellPeople = null;
-				selectedCell = null;
-				tabIndex = 2;
-			}}
-			id={tabIndex === 2 ? 'selected-operation' : ''}
-		>
-			Advanced Filter
-		</button>
 	</div>
-	<section class="flex flex-col">
+	<section id="schedule-operations-content" class="flex flex-col">
 		{#if tabIndex === 0}
 			<input bind:value={name} placeholder="Your Name" />
 
@@ -428,108 +413,86 @@
 					Admin
 				</label>
 			</section>
-		{:else if tabIndex === 2}
-			<input bind:value={advancedFilterQuery} placeholder="Advanced Filter Query" />
-			<button
-				onclick={() => {
-					try {
-						const query = TeamQuery.parse(advancedFilterQuery);
-						const failedName = query.verifyNames(new Set(Object.values(teams).flat()));
-						if (failedName !== null) {
-							advancedFilterParseError = `"${failedName}" not found in any team`;
-							return;
-						}
-						filterFnFromQuery(query);
-					} catch (e) {
-						if (e instanceof Error) {
-							advancedFilterParseError = e.message;
-						} else {
-							advancedFilterParseError = e as string;
-						}
-					}
-				}}
-			>
-				Execute
-			</button>
-			<output>{advancedFilterParseError}</output>
 		{/if}
 	</section>
 </section>
 
-<table>
-	<thead>
-		<tr>
-			<th></th>
-			{#each DAYS as day}
-				<th>{day}</th>
-			{/each}
-		</tr>
-	</thead>
-	<tbody>
-		{#each { length: 32 } as _, y}
+<div class="flex justify-end flex-row-reverse flex-wrap gap-4 m-4">
+	{#if tabIndex !== 0}
+		<section class="flex flex-row flex-wrap gap-4">
+			{#if selectedCellPeople !== null}
+				{#each selectedCellPeople as name}
+					<div>{name}</div>
+				{/each}
+			{:else}
+				{#each maxPresent as name}
+					<div>{name}</div>
+				{/each}
+			{/if}
+		</section>
+	{/if}
+	
+	<table>
+		<thead>
 			<tr>
-				<td>{timeString(y)}</td>
-				{#each DAYS as _, x}
-					{#if tabIndex === 0}
-						<td
-							class="schedule-cell unscrollable"
-							style:--p={isUpdateCellGreen(x, y) ? '100%' : '0%'}
-							onpointerdown={(event) => {
-								if (name === '') {
-									return;
-								}
-								event.currentTarget.releasePointerCapture(event.pointerId);
-								deleting = isPositionInsideAvailabilities(x, y, name);
-								updateDrag = true;
-								dragStartX = x;
-								dragStartY = y;
-								dragEndX = x;
-								dragEndY = y;
-							}}
-							onpointerenter={(event) => {
-								if (updateDrag) {
-									event.stopPropagation();
-									dragEndX = x;
-									dragEndY = y;
-								}
-							}}
-						>
-						</td>
-					{:else}
-						{#snippet scheduleCell(people: Set<string>)}
-							<td
-								class="schedule-cell"
-								style:--p={`${maxPresent.size === 0 ? 0 : (people.size / maxPresent.size) * 100}%`}
-								title={`${people.size} / ${maxPresent.size === 0 ? 1 : maxPresent.size}`}
-								onpointerenter={() => {
-									selectedCellPeople = people;
-									selectedCell = [x, y];
-								}}
-								id={selectedCell !== null && selectedCell[0] === x && selectedCell[1] === y ? 'selected-cell' : ''}
-							>
-							</td>
-						{/snippet}
-						{@render scheduleCell(filterFn(x, y))}
-					{/if}
+				<th></th>
+				{#each DAYS as day}
+					<th>{day}</th>
 				{/each}
 			</tr>
-		{/each}
-	</tbody>
-</table>
-
-{#if tabIndex !== 0}
-	<section class="flex flex-row flex-wrap gap-4">
-		{#if selectedCellPeople !== null}
-			{#each selectedCellPeople as name}
-				<div>{name}</div>
+		</thead>
+		<tbody>
+			{#each { length: 32 } as _, y}
+				<tr>
+					<td>{timeString(y)}</td>
+					{#each DAYS as _, x}
+						{#if tabIndex === 0}
+							<td
+								class="schedule-cell unscrollable"
+								style:--p={isUpdateCellGreen(x, y) ? '100%' : '0%'}
+								onpointerdown={(event) => {
+									if (name === '') {
+										return;
+									}
+									event.currentTarget.releasePointerCapture(event.pointerId);
+									deleting = isPositionInsideAvailabilities(x, y, name);
+									updateDrag = true;
+									dragStartX = x;
+									dragStartY = y;
+									dragEndX = x;
+									dragEndY = y;
+								}}
+								onpointerenter={(event) => {
+									if (updateDrag) {
+										event.stopPropagation();
+										dragEndX = x;
+										dragEndY = y;
+									}
+								}}
+							>
+							</td>
+						{:else}
+							{#snippet scheduleCell(people: Set<string>)}
+								<td
+									class="schedule-cell"
+									style:--p={`${maxPresent.size === 0 ? 0 : (people.size / maxPresent.size) * 100}%`}
+									title={`${people.size} / ${maxPresent.size === 0 ? 1 : maxPresent.size}`}
+									onpointerenter={() => {
+										selectedCellPeople = people;
+										selectedCell = [x, y];
+									}}
+									id={selectedCell !== null && selectedCell[0] === x && selectedCell[1] === y ? 'selected-cell' : ''}
+								>
+								</td>
+							{/snippet}
+							{@render scheduleCell(filterFn(x, y))}
+						{/if}
+					{/each}
+				</tr>
 			{/each}
-		{:else}
-			{#each maxPresent as name}
-				<div>{name}</div>
-			{/each}
-		{/if}
-	</section>
-{/if}
+		</tbody>
+	</table>
+</div>
 
 <style>
 	th {
@@ -538,7 +501,7 @@
 		min-width: 3rem;
 	}
 	.schedule-cell {
-		background-color: color-mix(in oklab, lightgray, lightgreen var(--p));
+		background-color: color-mix(in oklab, darkgray, green var(--p));
 		padding: 0;
 	}
 	.unscrollable {
@@ -568,5 +531,8 @@
 	}
 	#selected-cell {
 		background-color: aqua;
+	}
+	#schedule-operations-content {
+		background-color: lightgray;
 	}
 </style>
