@@ -7,7 +7,7 @@
 	<nav class="flex flex-row items-center gap-4">
 		<enhanced:img src="$lib/icon.png" alt="Utah Student Robotics" class="logo" />
 		<a href={`${base}/scheduler`}>Scheduler</a>
-		<a href={`${base}/manifest`}>Manifest</a>
+		<!-- <a href={`${base}/manifest`}>Manifest</a> -->
 	</nav>
 </header>
 

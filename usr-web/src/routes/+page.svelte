@@ -10,10 +10,10 @@
 			<h2>Scheduler</h2>
 			<p>A unified schedule for Utah Student Robotics</p>
 		</a>
-		<a class="app-card manifest" href={`${base}/manifest`}>
+		<!-- <a class="app-card manifest" href={`${base}/manifest`}>
 			<h2>Manifest</h2>
 			<p>Internal tracking of orders and inventory</p>
-		</a>
+		</a> -->
 	</section>
 </div>
 
@@ -30,9 +30,9 @@
 	.scheduler {
 		background-color: aquamarine;
 	}
-	.manifest {
+	/* .manifest {
 		background-color: cornflowerblue;
-	}
+	} */
 	.hero-image {
 		width: 20rem;
 		height: auto;
