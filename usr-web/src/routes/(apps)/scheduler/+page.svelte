@@ -167,7 +167,7 @@
 
 			for (let y = Math.min(dragStartY, dragEndY); y <= Math.max(dragStartY, dragEndY); y++) {
 				for (let x = Math.min(dragStartX, dragEndX); x <= Math.max(dragStartX, dragEndX); x++) {
-					times.push(y + x * 32);
+					times.push(y + x * 10 * 4);
 				}
 			}
 
@@ -229,7 +229,7 @@
 	}
 
 	function isPositionInsideAvailabilities(x: number, y: number, name: string) {
-		return availabilities[y + x * 32]?.includes(name) ?? false;
+		return availabilities[y + x * 10 * 4]?.includes(name) ?? false;
 	}
 
 	function isUpdateCellGreen(x: number, y: number) {
@@ -275,7 +275,7 @@
 
 			for (const [team, names] of Object.entries(teams)) {
 				const newSubteam = names.filter(
-					(name) => availabilities[y + x * 32]?.includes(name) ?? false
+					(name) => availabilities[y + x * 10 * 4]?.includes(name) ?? false
 				);
 				newTeams[team] = newSubteam;
 				for (const name of newSubteam) {
@@ -442,7 +442,7 @@
 			</tr>
 		</thead>
 		<tbody>
-			{#each { length: 32 } as _, y}
+			{#each { length: 40 } as _, y}
 				<tr>
 					<td>{timeString(y)}</td>
 					{#each DAYS as _, x}

@@ -141,7 +141,7 @@ async fn get_schedule(State(state): State<Arc<UsrState>>) -> Response {
 
     Json(Schedule {
         availabilities: {
-            let mut out: Box<[Vec<String>]> = std::iter::from_fn(|| Some(Vec::default())).take(7 * 8 * 4).collect();
+            let mut out: Box<[Vec<String>]> = std::iter::from_fn(|| Some(Vec::default())).take(7 * 10 * 4).collect();
             for model in availabilities {
                 out[model.time as usize].push(model.name);
             }
