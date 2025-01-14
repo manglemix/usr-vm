@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
                     #[cfg(not(debug_assertions))]
                     {
                         layer = layer.allow_origin(
-                            "https://utahrobotics.github.io".parse::<HeaderValue>().unwrap(),
+                            "https://utahrobotics.github.io".parse::<axum::http::HeaderValue>().unwrap(),
                         );
                     }
                     layer
