@@ -113,10 +113,10 @@ export class TeamQuery {
 	public verifyNames(names: Set<string>): string | null {
 		let leftValid;
 		if (typeof this.left === 'string') {
-            let word = this.left;
-            if (word.startsWith('!')) {
-                word = word.substring(1);
-            }
+			let word = this.left;
+			if (word.startsWith('!')) {
+				word = word.substring(1);
+			}
 			leftValid = word === '*' || names.has(word) || TEAM_SET.has(word) ? null : word;
 		} else {
 			leftValid = this.left.verifyNames(names);
@@ -125,13 +125,11 @@ export class TeamQuery {
 			return leftValid;
 		}
 		if (typeof this.right === 'string') {
-            let word = this.right;
-            if (word.startsWith('!')) {
-                word = word.substring(1);
-            }
-			return word === '*' || names.has(word) || TEAM_SET.has(word)
-				? null
-				: word;
+			let word = this.right;
+			if (word.startsWith('!')) {
+				word = word.substring(1);
+			}
+			return word === '*' || names.has(word) || TEAM_SET.has(word) ? null : word;
 		} else {
 			return this.right.verifyNames(names);
 		}

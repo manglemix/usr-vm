@@ -335,7 +335,7 @@
 	<title>USR Scheduler</title>
 </svelte:head>
 
-<section id="schedule-operations" class="ml-4 mr-4 mb-4">
+<section id="schedule-operations" class="mb-4 ml-4 mr-4">
 	<div id="schedule-tabs" class="flex flex-row">
 		<button
 			onclick={() => {
@@ -417,7 +417,7 @@
 	</section>
 </section>
 
-<div class="flex justify-end flex-row-reverse flex-wrap gap-4 m-4">
+<div class="m-4 flex flex-row-reverse flex-wrap justify-end gap-4">
 	{#if tabIndex !== 0}
 		<section class="flex flex-row flex-wrap gap-4">
 			{#if selectedCellPeople !== null}
@@ -431,7 +431,7 @@
 			{/if}
 		</section>
 	{/if}
-	
+
 	<table>
 		<thead>
 			<tr>
@@ -481,7 +481,9 @@
 										selectedCellPeople = people;
 										selectedCell = [x, y];
 									}}
-									id={selectedCell !== null && selectedCell[0] === x && selectedCell[1] === y ? 'selected-cell' : ''}
+									id={selectedCell !== null && selectedCell[0] === x && selectedCell[1] === y
+										? 'selected-cell'
+										: ''}
 								>
 								</td>
 							{/snippet}

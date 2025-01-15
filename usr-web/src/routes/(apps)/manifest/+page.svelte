@@ -101,7 +101,7 @@
 	<title>USR Manifest</title>
 </svelte:head>
 
-<section class="w-min m-4">
+<section class="m-4 w-min">
 	<div class="flex flex-row justify-between">
 		<label>
 			<input type="checkbox" bind:checked={hideInStorage} />
@@ -215,69 +215,65 @@
 	{#snippet selectAnOrder()}
 		<h2>Select an order</h2>
 	{/snippet}
-	{#snippet input()} 
-	<label>
-		Item Name*
-		<input type="text" bind:value={pending_order_name} placeholder="Item Name" />
-	</label>
-
-	<label>
-		Vendor*
-		<input type="text" bind:value={pending_order_vendor} placeholder="Vendor" />
-	</label>
-
-	<label>
-		Link*
-		<input
-			type="url"
-			bind:value={pending_order_link}
-			placeholder="Link to the store"
-		/>
-	</label>
-
-	<div class="flex flex-row justify-around">
+	{#snippet input()}
 		<label>
-			Count*
-			<input type="number" bind:value={pending_order_count} />
+			Item Name*
+			<input type="text" bind:value={pending_order_name} placeholder="Item Name" />
 		</label>
-		
+
 		<label>
-			Unit Cost* (USD)
-			<input type="number" bind:value={pending_order_unit_cost} step="0.01" />
+			Vendor*
+			<input type="text" bind:value={pending_order_vendor} placeholder="Vendor" />
 		</label>
-	</div>
 
-	<label>
-		Team*
-		<select id="team" bind:value={pending_order_team}>
-			<option value="" disabled selected>Select a team</option>
-			<option value="Software">Software</option>
-			<option value="Mechanical">Mechanical</option>
-			<option value="Electrical">Electrical</option>
-			<option value="Systems">Systems</option>
-			<option value="Social">Social</option>
-			<option value="Admin">Admin</option>
-		</select>
-	</label>
+		<label>
+			Link*
+			<input type="url" bind:value={pending_order_link} placeholder="Link to the store" />
+		</label>
 
-	<label>
-		Reason*
-		<textarea bind:value={pending_order_reason} placeholder="Reason"></textarea>
-	</label>
+		<div class="num-inputs flex flex-row justify-around gap-4">
+			<label>
+				Count*
+				<input type="number" bind:value={pending_order_count} />
+			</label>
 
-	<label>
-		Store In
-		<input
-			type="text"
-			bind:value={pending_order_store_in}
-			placeholder="Where to leave the item"
-		/>
-	</label>
+			<label>
+				Unit Cost* (USD)
+				<input type="number" bind:value={pending_order_unit_cost} step="0.01" />
+			</label>
+		</div>
+
+		<label>
+			Team*
+			<select id="team" bind:value={pending_order_team}>
+				<option value="" disabled selected>Select a team</option>
+				<option value="Software">Software</option>
+				<option value="Mechanical">Mechanical</option>
+				<option value="Electrical">Electrical</option>
+				<option value="Systems">Systems</option>
+				<option value="Social">Social</option>
+				<option value="Admin">Admin</option>
+			</select>
+		</label>
+
+		<label>
+			Reason*
+			<textarea bind:value={pending_order_reason} placeholder="Reason"></textarea>
+		</label>
+
+		<label>
+			Store In
+			<input
+				type="text"
+				bind:value={pending_order_store_in}
+				placeholder="Where to leave the item"
+			/>
+		</label>
 	{/snippet}
 	<section id="order-operations-content" class="flex flex-col gap-4 p-4">
 		{#if tabIndex === 0}
 			{@render input()}
-			
+
 			<button
 				onclick={async () => {
 					if (
@@ -490,5 +486,15 @@
 		background-color: darkgray;
 		padding: 0.2rem;
 		border: 1px solid black;
+	}
+	.num-inputs input {
+		width: 6rem;
+	}
+	.num-inputs label {
+		display: flex;
+		flex-direction: row;
+		gap: 0.5rem;
+		align-items: center;
+		text-align: end;
 	}
 </style>
