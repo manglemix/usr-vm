@@ -32,7 +32,7 @@
 	interface OrderStatus {
 		order_id: number;
 		instance_id: number;
-		date: string;
+		date: string | Date;
 		status: 'New' | 'Submitted' | 'Shipped' | 'Delivered' | 'InStorage' | 'In Storage';
 	}
 	let statuses: OrderStatus[] = $state([]);
@@ -49,12 +49,7 @@
 		});
 		statuses = body.statuses;
 		statuses = statuses.map((status) => {
-			status.date = new Date(status.date).toLocaleString('en-US', {
-				weekday: 'short',
-				year: 'numeric',
-				month: 'long',
-				day: 'numeric'
-			});
+			status.date = new Date(status.date);
 			if (status.status === 'InStorage') {
 				status.status = 'In Storage';
 			}
@@ -110,6 +105,45 @@
 		out.sort((a, b) => (a.instance_id < b.instance_id ? -1 : 1));
 		return out;
 	}
+
+	function exportCSV() {
+		const header = ['Name', 'Vendor', 'Link', 'Count', 'Unit Cost', 'Store In', 'Team', 'Reason', 'Subtotal', 'Status'];
+		const lines = [header.join(',')];
+
+		for (const o of orders) {
+			const st = statuses
+				.filter(s => s.order_id === o.id)
+				.map(s => {
+					const date = s.date as Date;
+					const day = String(date.getDate()).padStart(2, '0');
+					const month = String(date.getMonth() + 1).padStart(2, '0');
+					const year = String(date.getFullYear()).slice(-2);
+					return `${s.status}: ${day}/${month}/${year}`;
+				})
+				.join(',');
+			const sub = (o.count * (o.unit_cost as number)).toFixed(2);
+			lines.push([
+				o.name,
+				o.vendor,
+				o.link,
+				o.count,
+				o.unit_cost,
+				o.store_in,
+				o.team,
+				o.reason,
+				sub,
+				st,
+			].map(String).join(','));
+		}
+
+		const csv = new Blob([lines.join('\n')], { type: 'text/csv' });
+		const url = URL.createObjectURL(csv);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = 'manifest.csv';
+		link.click();
+		URL.revokeObjectURL(url);
+	}
 </script>
 
 <svelte:head>
@@ -123,11 +157,14 @@
 			Hide "In Storage"
 		</label>
 
-		{#if fetching}
-			<button disabled> Fetching... </button>
-		{:else}
-			<button onclick={refreshOrders}> Refresh </button>
-		{/if}
+		<div class="flex flex-row gap-4">
+			{#if fetching}
+				<button disabled> Fetching... </button>
+			{:else}
+				<button onclick={refreshOrders}> Refresh </button>
+			{/if}
+			<button onclick={exportCSV}> Export CSV </button>
+		</div>
 	</div>
 	<table>
 		<thead>
@@ -160,7 +197,12 @@
 						<td class="order-name">{order.name}</td>
 						<td class="order-status">
 							{#each statusesOf(order.id) as status}
-								<p>{status.status}: {status.date}</p>
+								<p><span class="italic">{status.status}</span>: {status.date.toLocaleString('en-US', {
+									weekday: 'short',
+									year: 'numeric',
+									month: 'long',
+									day: 'numeric'
+								})}</p>
 							{/each}
 						</td>
 						<td class="order-vendor">{order.vendor}</td>
@@ -459,32 +501,14 @@
 				<output>{orderOperationOutput}</output>
 			{/if}
 		{:else if tabIndex === 4}
-			{#if selectedOrderId === null}
-				{@render selectAnOrder()}
-			{:else}
-				<button
-					onclick={async () => {
-						const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/del/order`, {
-							method: 'DELETE',
-							headers: {
-								'Content-Type': 'application/json'
-							},
-							body: JSON.stringify({
-								id: selectedOrderId
-							})
-						});
-						if (response.ok) {
-							orderOperationOutput = '';
-							refreshOrders();
-						} else {
-							orderOperationOutput = await response.text();
-						}
-					}}
-				>
-					Cancel Order
-				</button>
-				<output>{orderOperationOutput}</output>
-			{/if}
+			{#snippet cost(team: string)}
+				<p>{team} Total: {orders
+					.filter(o => o.team === team)
+					.reduce((acc, cur) => acc + cur.count * (cur.unit_cost as number), 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+			{/snippet}
+			{@render cost("Software")}
+			{@render cost("Mechanical")}
+			{@render cost("Electrical")}
 		{/if}
 	</section>
 </section>
