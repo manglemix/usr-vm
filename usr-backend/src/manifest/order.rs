@@ -1,7 +1,5 @@
-use std::fmt::Display;
-
 use sea_orm::entity::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::scheduler;
 
@@ -11,8 +9,6 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: u32,
     pub name: String,
-    pub date: DateTime,
-    pub status: Status,
     pub count: u32,
     pub unit_cost: Decimal,
     pub store_in: String,
@@ -27,24 +23,3 @@ pub enum Relation {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
-
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Deserialize, Hash, Copy, Serialize)]
-#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(1))")]
-pub enum Status {
-    #[sea_orm(string_value = "N")]
-    New,
-    #[sea_orm(string_value = "S")]
-    Submitted,
-    #[sea_orm(string_value = "F")]
-    Shipped,
-    #[sea_orm(string_value = "D")]
-    Delivered,
-    #[sea_orm(string_value = "I")]
-    InStorage,
-}
-
-impl Display for Status {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}

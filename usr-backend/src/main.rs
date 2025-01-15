@@ -36,14 +36,14 @@ impl Write for LogWriter {
 
 #[derive(Deserialize)]
 struct Config {
-    new_orders_webhook: String,
-    order_updates_webhook: String,
+    new_orders_webhook: Option<String>,
+    order_updates_webhook: Option<String>,
 }
 
 struct UsrState {
     db: DatabaseConnection,
-    new_orders_webhook: DiscordWebhook,
-    order_updates_webhook: DiscordWebhook,
+    new_orders_webhook: Option<DiscordWebhook>,
+    order_updates_webhook: Option<DiscordWebhook>,
 }
 
 #[tokio::main]
@@ -84,10 +84,29 @@ async fn main() -> anyhow::Result<()> {
 
     if Path::new(".reset-db").exists() {
         info!("Resetting DB");
+        let directive = std::fs::read_to_string(".reset-db")?;
+
+        match directive.as_str() {
+            "scheduler" => {
+                scheduler::reset_tables(&db).await?;
+                info!("Reset scheduler tables");
+            }
+            "manifest" => {
+                manifest::reset_tables(&db).await?;
+                info!("Reset manifest tables");
+            }
+            "all" => {
+                scheduler::reset_tables(&db).await?;
+                manifest::reset_tables(&db).await?;
+                info!("Reset all tables");
+            }
+            _ => {
+                error!("Invalid directive in .reset-db");
+                return Ok(());
+            }
+        }
+
         std::fs::remove_file(".reset-db")?;
-        scheduler::reset_tables(&db).await?;
-        manifest::reset_tables(&db).await?;
-        info!("DB Reset");
     }
 
     let app = Router::new()
@@ -123,8 +142,20 @@ async fn main() -> anyhow::Result<()> {
         )
         .with_state(Arc::new(UsrState {
             db,
-            new_orders_webhook: DiscordWebhook::new(config.new_orders_webhook)?,
-            order_updates_webhook: DiscordWebhook::new(config.order_updates_webhook)?,
+            new_orders_webhook: {
+                if let Some(new_orders_webhook) = config.new_orders_webhook {
+                    Some(DiscordWebhook::new(new_orders_webhook)?)
+                } else {
+                    None
+                }
+            },
+            order_updates_webhook: {
+                if let Some(order_updates_webhook) = config.order_updates_webhook {
+                    Some(DiscordWebhook::new(order_updates_webhook)?)
+                } else {
+                    None
+                }
+            },
         }));
 
     default_provider()

@@ -12,17 +12,13 @@
 
 	$effect(() => {
 		if (hideInStorage) {
-			if (selectedOrderId !== null && orders[selectedOrderId].status === 'In Storage') {
-				selectedOrderId = null;
-			}
+			selectedOrderId = null;
 		}
 	});
 
 	interface Order {
 		id: number;
 		name: string;
-		date: string;
-		status: 'New' | 'Submitted' | 'Shipped' | 'Delivered' | 'InStorage' | 'In Storage';
 		count: number;
 		unit_cost: number | string;
 		store_in: string;
@@ -33,23 +29,36 @@
 	}
 	let orders: Order[] = $state([]);
 
+	interface OrderStatus {
+		order_id: number;
+		instance_id: number;
+		date: string;
+		status: 'New' | 'Submitted' | 'Shipped' | 'Delivered' | 'InStorage' | 'In Storage';
+	}
+	let statuses: OrderStatus[] = $state([]);
+
 	async function refreshOrders() {
 		fetching = true;
 		const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/list/order`);
 		selectedOrderId = null;
-		orders = await response.json();
+		const body = await response.json();
+		orders = body.orders;
 		orders = orders.map((order) => {
-			order.date = new Date(order.date).toLocaleString('en-US', {
+			order.unit_cost = parseFloat(order.unit_cost as string);
+			return order;
+		});
+		statuses = body.statuses;
+		statuses = statuses.map((status) => {
+			status.date = new Date(status.date).toLocaleString('en-US', {
 				weekday: 'short',
 				year: 'numeric',
 				month: 'long',
 				day: 'numeric'
 			});
-			if (order.status === 'InStorage') {
-				order.status = 'In Storage';
+			if (status.status === 'InStorage') {
+				status.status = 'In Storage';
 			}
-			order.unit_cost = parseFloat(order.unit_cost as string);
-			return order;
+			return status;
 		});
 		setTimeout(() => {
 			fetching = false;
@@ -68,7 +77,7 @@
 	let pending_order_store_in: string = $state('');
 	let pending_order_team: Team | '' = $state('');
 	let pending_order_reason = $state('');
-	let updated_order_status: Order['status'] | '' = $state('');
+	let updated_order_status: OrderStatus['status'] | '' = $state('');
 
 	function populatePending() {
 		if (selectedOrderId !== null) {
@@ -95,6 +104,12 @@
 		pending_order_reason = '';
 		updated_order_status = '';
 	}
+
+	function statusesOf(orderId: number) {
+		const out = statuses.filter((status) => status.order_id === orderId);
+		out.sort((a, b) => (a.instance_id < b.instance_id ? -1 : 1));
+		return out;
+	}
 </script>
 
 <svelte:head>
@@ -118,10 +133,9 @@
 		<thead>
 			<tr>
 				<th>Name</th>
-				<th>Date</th>
+				<th>Status</th>
 				<th>Vendor</th>
 				<th>Link</th>
-				<th>Status</th>
 				<th>Count</th>
 				<th>Unit Cost</th>
 				<th>Store In</th>
@@ -132,7 +146,7 @@
 		</thead>
 		<tbody>
 			{#each orders as order, i}
-				{#if !hideInStorage || order.status !== 'In Storage'}
+				{#if !hideInStorage || statusesOf(order.id).pop()?.status !== 'In Storage'}
 					<tr
 						onclick={() => {
 							selectedOrderId = order.id;
@@ -144,10 +158,13 @@
 						id={selectedOrderId === order.id ? 'selectedOrder' : ''}
 					>
 						<td class="order-name">{order.name}</td>
-						<td class="order-date">{order.date}</td>
+						<td class="order-status">
+							{#each statusesOf(order.id) as status}
+								<p>{status.status}: {status.date}</p>
+							{/each}
+						</td>
 						<td class="order-vendor">{order.vendor}</td>
 						<td><a href={order.link}>Link</a></td>
-						<td class="order-status">{order.status}</td>
 						<td>{order.count}</td>
 						<td
 							>{order.unit_cost.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</td
@@ -210,6 +227,15 @@
 			id={tabIndex === 3 ? 'selected-operation' : ''}
 		>
 			Cancel Order
+		</button>
+		<button
+			onclick={() => {
+				orderOperationOutput = '';
+				tabIndex = 4;
+			}}
+			id={tabIndex === 4 ? 'selected-operation' : ''}
+		>
+			Statistics
 		</button>
 	</div>
 	{#snippet selectAnOrder()}
@@ -432,6 +458,33 @@
 				</button>
 				<output>{orderOperationOutput}</output>
 			{/if}
+		{:else if tabIndex === 4}
+			{#if selectedOrderId === null}
+				{@render selectAnOrder()}
+			{:else}
+				<button
+					onclick={async () => {
+						const response = await fetch(`${PUBLIC_API_ENDPOINT}/api/manifest/del/order`, {
+							method: 'DELETE',
+							headers: {
+								'Content-Type': 'application/json'
+							},
+							body: JSON.stringify({
+								id: selectedOrderId
+							})
+						});
+						if (response.ok) {
+							orderOperationOutput = '';
+							refreshOrders();
+						} else {
+							orderOperationOutput = await response.text();
+						}
+					}}
+				>
+					Cancel Order
+				</button>
+				<output>{orderOperationOutput}</output>
+			{/if}
 		{/if}
 	</section>
 </section>
@@ -461,11 +514,8 @@
 	.order-name {
 		min-width: 5rem;
 	}
-	.order-date {
-		min-width: 11rem;
-	}
 	.order-status {
-		min-width: 6rem;
+		min-width: 16rem;
 	}
 	#order-tabs > button {
 		background-color: darkgray;

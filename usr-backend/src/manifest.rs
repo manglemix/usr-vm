@@ -7,7 +7,7 @@ use axum::{
 use discord_webhook2::message::Message;
 use parking_lot::Mutex;
 use sea_orm::{
-    prelude::Decimal, sea_query::Table, sqlx::types::chrono::Local, ActiveModelTrait, ActiveValue, ConnectionTrait, DatabaseConnection, EntityTrait, Schema
+    prelude::Decimal, sea_query::Table, sqlx::types::chrono::Local, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Schema, TransactionTrait
 };
 use serde::Deserialize;
 use tracing::error;
@@ -15,6 +15,8 @@ use tracing::error;
 use crate::{scheduler, UsrState};
 
 mod order;
+mod order_status;
+
 struct BatchedTask {
     queue: HashMap<u32, String>,
     deadline: Option<Instant>,
@@ -55,8 +57,6 @@ async fn new_order(
     let active_model = order::ActiveModel {
         id: ActiveValue::NotSet,
         name: ActiveValue::Set(pending_order.name),
-        date: ActiveValue::Set(Local::now().naive_local()),
-        status: ActiveValue::Set(order::Status::New),
         count: ActiveValue::Set(pending_order.count),
         unit_cost: ActiveValue::Set(pending_order.unit_cost),
         store_in: ActiveValue::Set(pending_order.store_in),
@@ -65,7 +65,22 @@ async fn new_order(
         vendor: ActiveValue::Set(pending_order.vendor),
         link: ActiveValue::Set(pending_order.link),
     };
-    match active_model.insert(&state.db).await {
+    let result = state.db.transaction(|tx| Box::pin(async move {
+        let model = active_model.insert(tx).await?;
+
+        let active_model = order_status::ActiveModel {
+            order_id: ActiveValue::Set(model.id),
+            instance_id: ActiveValue::NotSet,
+            date: ActiveValue::Set(Local::now().naive_local()),
+            status: ActiveValue::Set(order_status::Status::New),
+        };
+
+        active_model.insert(tx).await?;
+
+        Result::<_, sea_orm::DbErr>::Ok(model)
+    })).await;
+
+    match result {
         Ok(m) => {    
             let mut guard = BATCHED.lock();
             guard.queue.insert(m.id, webhook_msg);
@@ -74,50 +89,50 @@ async fn new_order(
     
             if was_none {
                 drop(guard);
-    
-                tokio::spawn(async move {
-                    loop {
-                        let deadline = BATCHED.lock().deadline.unwrap();
-                        tokio::time::sleep_until(deadline.into()).await;
-                        let queue;
-                        {
-                            let mut guard = BATCHED.lock();
-                            if guard.deadline.unwrap() != deadline {
-                                continue;
-                            }
-                            let replacement = HashMap::with_capacity(guard.queue.capacity());
-                            queue = std::mem::replace(&mut guard.queue, replacement);
-                        }
-                        let mut running = String::new();
-                        for (_, msg) in queue {
-                            if running.len() + msg.len() + 1 < 2000 {
-                                running.push_str(&msg);
-                                running.push_str("\n");
-                            } else {
-                                if let Err(e) = state
-                                    .new_orders_webhook
-                                    .send(&Message::new(|message| message.content(running)))
-                                    .await
-                                {
-                                    error!("Failed to trigger new-order webhook: {e}");
+                if state.new_orders_webhook.is_some() {
+                    tokio::spawn(async move {
+                        let new_orders_webhook = state.new_orders_webhook.as_ref().unwrap();
+                        loop {
+                            let deadline = BATCHED.lock().deadline.unwrap();
+                            tokio::time::sleep_until(deadline.into()).await;
+                            let queue;
+                            {
+                                let mut guard = BATCHED.lock();
+                                if guard.deadline.unwrap() != deadline {
+                                    continue;
                                 }
-                                running = msg;
+                                let replacement = HashMap::with_capacity(guard.queue.capacity());
+                                queue = std::mem::replace(&mut guard.queue, replacement);
+                            }
+                            let mut running = String::new();
+                            for (_, msg) in queue {
+                                if running.len() + msg.len() + 1 < 2000 {
+                                    running.push_str(&msg);
+                                    running.push_str("\n");
+                                } else {
+                                    if let Err(e) = new_orders_webhook
+                                        .send(&Message::new(|message| message.content(running)))
+                                        .await
+                                    {
+                                        error!("Failed to trigger new-order webhook: {e}");
+                                    }
+                                    running = msg;
+                                }
+                            }
+                            if let Err(e) = new_orders_webhook
+                                .send(&Message::new(|message| message.content(running)))
+                                .await
+                            {
+                                error!("Failed to trigger new-order webhook: {e}");
+                            }
+                            let mut guard = BATCHED.lock();
+                            if guard.queue.is_empty() {
+                                guard.deadline = None;
+                                break;
                             }
                         }
-                        if let Err(e) = state
-                            .new_orders_webhook
-                            .send(&Message::new(|message| message.content(running)))
-                            .await
-                        {
-                            error!("Failed to trigger new-order webhook: {e}");
-                        }
-                        let mut guard = BATCHED.lock();
-                        if guard.queue.is_empty() {
-                            guard.deadline = None;
-                            break;
-                        }
-                    }
-                });
+                    });
+                }
             }
     
             (StatusCode::OK, "")
@@ -147,9 +162,9 @@ async fn change_order(
     State(state): State<Arc<UsrState>>,
     Json(change_order): Json<ChangeOrder>,
 ) -> (StatusCode, &'static str) {
-    match order::Entity::find_by_id(change_order.id).one(&state.db).await {
+    match order_status::Entity::find().filter(order_status::Column::OrderId.eq(change_order.id)).order_by_desc(order_status::Column::InstanceId).one(&state.db).await {
         Ok(Some(model)) => {
-            if model.status != order::Status::New {
+            if model.status != order_status::Status::New {
                 return (StatusCode::BAD_REQUEST, "Order has already been processed");
             }
         }
@@ -175,8 +190,6 @@ async fn change_order(
     let active_model = order::ActiveModel {
         id: ActiveValue::Unchanged(change_order.id),
         name: ActiveValue::Set(change_order.name),
-        date: ActiveValue::NotSet,
-        status: ActiveValue::NotSet,
         count: ActiveValue::Set(change_order.count),
         unit_cost: ActiveValue::Set(change_order.unit_cost),
         store_in: ActiveValue::Set(change_order.store_in),
@@ -196,8 +209,8 @@ async fn change_order(
             }
             Entry::Vacant(_) => {
                 tokio::spawn(async move {
-                    if let Err(e) = state
-                        .new_orders_webhook
+                    let Some(new_orders_webhook) = state.new_orders_webhook.as_ref() else { return; };
+                    if let Err(e) = new_orders_webhook
                         .send(&Message::new(|message| message.content(webhook_msg)))
                         .await
                     {
@@ -213,20 +226,31 @@ async fn change_order(
 
 #[derive(Deserialize)]
 struct DeleteOrder {
-    id: u32
+    id: u32,
+    #[serde(default)]
+    force: bool
 }
 
 #[axum::debug_handler]
 async fn cancel_order(
     State(state): State<Arc<UsrState>>,
-    Json(DeleteOrder { id }): Json<DeleteOrder>,
+    Json(DeleteOrder { id, force }): Json<DeleteOrder>,
 ) -> (StatusCode, &'static str) {
     let webhook_msg;
-    match order::Entity::find_by_id(id).one(&state.db).await {
+
+    match order_status::Entity::find().filter(order_status::Column::OrderId.eq(id)).order_by_desc(order_status::Column::InstanceId).one(&state.db).await {
         Ok(Some(model)) => {
-            if model.status != order::Status::New {
+            if !force && model.status != order_status::Status::New {
                 return (StatusCode::BAD_REQUEST, "Order has already been processed");
             }
+            let model = match order::Entity::find_by_id(id).one(&state.db).await {
+                Ok(Some(model)) => model,
+                Ok(None) => unreachable!(),
+                Err(e) => {
+                    error!("Failed to find order: {e}");
+                    return (StatusCode::INTERNAL_SERVER_ERROR, "");
+                }
+            };
             webhook_msg = format!(
                 ">>> ***Order Cancelled***\n**Name:** {}\n**Count:** {}\n**Team:** {}",
                 model.name,
@@ -243,27 +267,40 @@ async fn cancel_order(
         }
     }
 
-    if let Err(e) = order::Entity::delete_by_id(id).exec(&state.db).await {
+    if force {
+        let result = state.db.transaction(|tx| Box::pin(async move {
+            order::Entity::delete_by_id(id).exec(tx).await?;
+            order_status::Entity::delete_many().filter(order_status::Column::OrderId.eq(id)).exec(tx).await?;
+            Result::<_, sea_orm::DbErr>::Ok(())
+        })).await;
+
+        if let Err(e) = result {
+            error!("Failed to force delete order: {e}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "");
+        }
+
+    } else if let Err(e) = order::Entity::delete_by_id(id).exec(&state.db).await {
         error!("Failed to delete order: {e}");
-        (StatusCode::INTERNAL_SERVER_ERROR, "")
-    } else {
-        tokio::spawn(async move {
-            if let Err(e) = state
-                .new_orders_webhook
-                .send(&Message::new(|message| message.content(webhook_msg)))
-                .await
-            {
-                error!("Failed to trigger new-order webhook: {e}");
-            }
-        });
-        (StatusCode::OK, "")
+        return (StatusCode::INTERNAL_SERVER_ERROR, "");
     }
+
+    tokio::spawn(async move {
+        let Some(new_orders_webhook) = state.new_orders_webhook.as_ref() else { return; };
+        if let Err(e) = new_orders_webhook
+            .send(&Message::new(|message| message.content(webhook_msg)))
+            .await
+        {
+            error!("Failed to trigger new-order webhook: {e}");
+        }
+    });
+
+    (StatusCode::OK, "")
 }
 
 #[derive(Deserialize)]
 pub struct UpdateOrder {
     pub id: u32,
-    pub status: order::Status
+    pub status: order_status::Status
 }
 
 #[axum::debug_handler]
@@ -272,15 +309,24 @@ async fn update_order(
     Json(update_order): Json<UpdateOrder>,
 ) -> (StatusCode, &'static str) {
     let webhook_msg;
-    match order::Entity::find_by_id(update_order.id).one(&state.db).await {
+
+    match order_status::Entity::find().filter(order_status::Column::OrderId.eq(update_order.id)).order_by_desc(order_status::Column::InstanceId).one(&state.db).await {
         Ok(Some(model)) => {
-            if model.status == order::Status::InStorage {
+            if model.status == order_status::Status::InStorage {
                 return (StatusCode::BAD_REQUEST, "Order is already in storage");
             }
             if model.status == update_order.status {
                 return (StatusCode::BAD_REQUEST, "Order is already in that state");
             }
-            if update_order.status == order::Status::InStorage {
+            let model = match order::Entity::find_by_id(update_order.id).one(&state.db).await {
+                Ok(Some(model)) => model,
+                Ok(None) => unreachable!(),
+                Err(e) => {
+                    error!("Failed to find order: {e}");
+                    return (StatusCode::INTERNAL_SERVER_ERROR, "");
+                }
+            };
+            if update_order.status == order_status::Status::InStorage {
                 if model.store_in.is_empty() {
                     webhook_msg = format!(
                         ">>> **Order Complete!**\n**Name:** {}\n**Team:** {}",
@@ -313,26 +359,19 @@ async fn update_order(
         }
     }
     
-    let active_model = order::ActiveModel {
-        id: ActiveValue::Unchanged(update_order.id),
-        name: ActiveValue::NotSet,
-        date: ActiveValue::NotSet,
+    let active_model = order_status::ActiveModel {
+        order_id: ActiveValue::Set(update_order.id),
+        instance_id: ActiveValue::NotSet,
+        date: ActiveValue::Set(Local::now().naive_local()),
         status: ActiveValue::Set(update_order.status),
-        count: ActiveValue::NotSet,
-        unit_cost: ActiveValue::NotSet,
-        store_in: ActiveValue::NotSet,
-        team: ActiveValue::NotSet,
-        reason: ActiveValue::NotSet,
-        vendor: ActiveValue::NotSet,
-        link: ActiveValue::NotSet,
     };
-    if let Err(e) = active_model.update(&state.db).await {
-        error!("Failed to update order: {e}");
+    if let Err(e) = active_model.insert(&state.db).await {
+        error!("Failed to update order status: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
         tokio::spawn(async move {
-            if let Err(e) = state
-                .order_updates_webhook
+            let Some(order_updates_webhook) = state.order_updates_webhook.as_ref() else { return; };
+            if let Err(e) = order_updates_webhook
                 .send(&Message::new(|message| message.content(webhook_msg)))
                 .await
             {
@@ -350,8 +389,21 @@ async fn get_orders(
     let result = order::Entity::find().all(&state.db).await;
 
     match result {
-        Ok(models) => {
-            Json(models).into_response()
+        Ok(orders) => {
+            let result = order_status::Entity::find().all(&state.db).await;
+
+            match result {
+                Ok(statuses) => {
+                    Json(serde_json::json!({
+                        "orders": orders,
+                        "statuses": statuses
+                    })).into_response()
+                }
+                Err(e) => {
+                    error!("Failed to get orders: {e}");
+                    (StatusCode::INTERNAL_SERVER_ERROR, "").into_response()
+                }
+            }
         }
         Err(e) => {
             error!("Failed to get orders: {e}");
@@ -376,6 +428,10 @@ pub async fn reset_tables(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr>
     db.execute(builder.build(Table::drop().table(order::Entity).if_exists()))
         .await?;
     db.execute(builder.build(&schema.create_table_from_entity(order::Entity)))
+        .await?;
+    db.execute(builder.build(Table::drop().table(order_status::Entity).if_exists()))
+        .await?;
+    db.execute(builder.build(&schema.create_table_from_entity(order_status::Entity)))
         .await?;
 
     Ok(())

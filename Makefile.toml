@@ -1,0 +1,12 @@
+[tasks.web]
+workspace = false
+cwd = "usr-web"
+script_runner = "@shell"
+script = '''
+npm run dev -- -- --host
+'''
+
+[tasks.backend]
+workspace = false
+command = "cargo"
+args = ["run", "-p", "usr-backend"]
