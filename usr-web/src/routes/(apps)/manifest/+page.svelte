@@ -497,4 +497,8 @@
 		align-items: center;
 		text-align: end;
 	}
+	table a {
+		text-decoration: underline;
+		color: blue;
+	}
 </style>
