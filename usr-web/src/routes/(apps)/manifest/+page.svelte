@@ -28,6 +28,8 @@
 		link: string;
 	}
 	let orders: Order[] = $state([]);
+	let expenditures: Record<string, number> = $state({});
+	let maxExpenditure = $state(0);
 
 	interface OrderStatus {
 		order_id: number;
@@ -58,6 +60,18 @@
 		setTimeout(() => {
 			fetching = false;
 		}, 500);
+
+		expenditures = orders.reduce<Record<string, number>>((acc, order) => {
+			const team = order.team;
+			const subtotal = order.count * (order.unit_cost as number);
+			if (acc[team] === undefined) {
+				acc[team] = 0;
+			}
+			acc[team] += subtotal;
+			return acc;
+		}, {});
+
+		maxExpenditure = Math.max(...Object.values(expenditures));
 	}
 
 	if (browser) {
@@ -502,13 +516,29 @@
 			{/if}
 		{:else if tabIndex === 4}
 			{#snippet cost(team: string)}
-				<p>{team} Total: {orders
-					.filter(o => o.team === team)
-					.reduce((acc, cur) => acc + cur.count * (cur.unit_cost as number), 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+				<p>{team} Total: {(expenditures[team] ?? 0).toLocaleString(
+					'en-US',
+					{ style: 'currency', currency: 'USD' }
+				)}</p>
 			{/snippet}
 			{@render cost("Software")}
 			{@render cost("Mechanical")}
 			{@render cost("Electrical")}
+
+			<section class="flex flex-row gap-4 w-min p-4" style:min-height="20rem" style:background-color="darkgray">
+				{#snippet bar(team: string)}
+					<div class="flex flex-col">
+						<div class="flex flex-col justify-end flex-grow">
+							<div style:background-color="darkred" style:height={`calc(100% * ${expenditures[team] / maxExpenditure})`}>
+							</div>
+						</div>
+						<p>{team}</p>
+					</div>
+				{/snippet}
+				{@render bar("Software")}
+				{@render bar("Mechanical")}
+				{@render bar("Electrical")}
+			</section>
 		{/if}
 	</section>
 </section>
