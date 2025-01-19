@@ -30,6 +30,7 @@
 	let orders: Order[] = $state([]);
 	let expenditures: Record<string, number> = $state({});
 	let maxExpenditure = $state(0);
+	const costIncrement = 200;
 
 	interface OrderStatus {
 		order_id: number;
@@ -526,11 +527,11 @@
 			{@render cost("Electrical")}
 
 			<section class="flex flex-col w-min" style:background-color="darkgray">
-				<div class="relative flex flex-row gap-10 w-min pt-8 pr-8 pl-16" style:min-height="20rem">
-					{#each { length: Math.floor(maxExpenditure / 100) + 1 } as _, i}
-						<div class="absolute flex flex-row" style:width={"calc(100% - 4rem)"} style:right="1rem" style:bottom={`calc((100% - 2rem) * ${i*100 / maxExpenditure})`}>
+				<div class="relative flex flex-row gap-10 w-min pt-8 pr-8 pl-20" style:min-height="20rem">
+					{#each { length: Math.floor(maxExpenditure / costIncrement) + 1 } as _, i}
+						<div class="absolute flex flex-row" style:width={"calc(100% - 5rem)"} style:right="1rem" style:bottom={`calc((100% - 2rem) * ${i*costIncrement / maxExpenditure})`}>
 							<div class="w-full border-t-2 border-black"></div>
-							<p class="absolute mr-2" style:bottom="-0.75rem" style:right="100%">${i * 100}</p>
+							<p class="absolute mr-2" style:bottom="-0.75rem" style:right="100%">${i * costIncrement}</p>
 						</div>
 					{/each}
 
@@ -540,14 +541,13 @@
 								<div style:background-color="darkred" style:height={`calc(100% * ${expenditures[team] / maxExpenditure})`} style:width="3rem">
 								</div>
 							</div>
-							<!-- <p>{team}</p> -->
 						</div>
 					{/snippet}
 					{@render bar("Software")}
 					{@render bar("Mechanical")}
 					{@render bar("Electrical")}
 				</div>
-				<div class="ml-14 flex flex-row gap-4">
+				<div class="flex flex-row gap-4" style:margin-left="4.5rem">
 					<p>Software</p>
 					<p>Mechanical</p>
 					<p>Electrical</p>
