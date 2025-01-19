@@ -1,11 +1,11 @@
-use std::{collections::{hash_map::Entry, HashMap, HashSet}, sync::Arc};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use axum::{extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, get, post}, Json, Router};
 use sea_orm::{sea_query::Table, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, Schema, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
-use crate::UsrState;
+use crate::{backup::backup_db, UsrState};
 
 mod availability;
 mod team;
@@ -19,7 +19,7 @@ struct PendingSchedule {
 }
 
 #[axum::debug_handler]
-async fn add_schedule(State(state): State<Arc<UsrState>>, Json(pending_schedule): Json<PendingSchedule>) -> (StatusCode, &'static str) {
+async fn add_schedule(State(state): State<&'static UsrState>, Json(pending_schedule): Json<PendingSchedule>) -> (StatusCode, &'static str) {
     if pending_schedule.name.is_empty() {
         return (StatusCode::BAD_REQUEST, "");
     }
@@ -37,12 +37,13 @@ async fn add_schedule(State(state): State<Arc<UsrState>>, Json(pending_schedule)
         error!("Failed to insert schedule: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
+        backup_db(state);
         (StatusCode::OK, "")
     }
 }
 
 #[axum::debug_handler]
-async fn del_schedule(State(state): State<Arc<UsrState>>, Json(pending_schedule): Json<PendingSchedule>) -> (StatusCode, &'static str) {
+async fn del_schedule(State(state): State<&'static UsrState>, Json(pending_schedule): Json<PendingSchedule>) -> (StatusCode, &'static str) {
     if pending_schedule.name.is_empty() {
         return (StatusCode::BAD_REQUEST, "");
     }
@@ -60,6 +61,7 @@ async fn del_schedule(State(state): State<Arc<UsrState>>, Json(pending_schedule)
         error!("Failed to delete schedule: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
+        backup_db(state);
         (StatusCode::OK, "")
     }
 }
@@ -71,7 +73,7 @@ struct SetTeam {
 }
 
 #[axum::debug_handler]
-async fn set_teams(State(state): State<Arc<UsrState>>, Json(set_team): Json<SetTeam>) -> (StatusCode, &'static str) {
+async fn set_teams(State(state): State<&'static UsrState>, Json(set_team): Json<SetTeam>) -> (StatusCode, &'static str) {
     if set_team.name.is_empty() {
         return (StatusCode::BAD_REQUEST, "");
     }
@@ -91,24 +93,10 @@ async fn set_teams(State(state): State<Arc<UsrState>>, Json(set_team): Json<SetT
         error!("Failed to set teams: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
+        backup_db(state);
         (StatusCode::OK, "")
     }
 }
-
-// #[axum::debug_handler]
-// async fn get_teams(State(db): State<Arc<DatabaseConnection>>, Path(name): Path<String>) -> Response {
-//     let result = team::Entity::find().filter(team::Column::Name.eq(name)).all(&*db).await;
-    
-//     match result {
-//         Ok(models) => {
-//             Json(models.into_iter().map(|model| model.team).collect::<Box<[team::Team]>>()).into_response()
-//         }
-//         Err(e) => {
-//             error!("Failed to get teams: {e}");
-//             (StatusCode::INTERNAL_SERVER_ERROR, "").into_response()
-//         }
-//     }
-// }
 
 #[derive(Serialize)]
 struct Schedule {
@@ -117,7 +105,7 @@ struct Schedule {
 }
 
 #[axum::debug_handler]
-async fn get_schedule(State(state): State<Arc<UsrState>>) -> Response {
+async fn get_schedule(State(state): State<&'static UsrState>) -> Response {
     let (availabilities, teams) = tokio::join!(
         availability::Entity::find().all(&state.db),
         team::Entity::find().all(&state.db),
@@ -160,7 +148,7 @@ async fn get_schedule(State(state): State<Arc<UsrState>>) -> Response {
     }).into_response()
 }
 
-pub fn router() -> Router<Arc<UsrState>> {
+pub fn router() -> Router<&'static UsrState> {
     Router::new()
     .route("/add/schedule", post(add_schedule))
     .route("/del/schedule", delete(del_schedule))

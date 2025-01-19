@@ -1,30 +1,16 @@
-use std::{collections::{hash_map::Entry, HashMap}, sync::{Arc, LazyLock}, time::Instant}
-;
-
 use axum::{
     extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, get, post}, Json, Router
 };
-use discord_webhook2::message::Message;
-use parking_lot::Mutex;
 use sea_orm::{
     prelude::Decimal, sea_query::Table, sqlx::types::chrono::Local, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Schema, TransactionTrait
 };
 use serde::Deserialize;
 use tracing::error;
 
-use crate::{scheduler, UsrState};
+use crate::{backup::backup_db, scheduler, UsrState};
 
 mod order;
 mod order_status;
-
-struct BatchedTask {
-    queue: HashMap<u32, String>,
-    deadline: Option<Instant>,
-}
-static BATCHED: LazyLock<Mutex<BatchedTask>> = LazyLock::new(|| Mutex::new(BatchedTask {
-    queue: HashMap::new(),
-    deadline: None,
-}));
 
 #[derive(Deserialize)]
 pub struct PendingOrder {
@@ -40,7 +26,7 @@ pub struct PendingOrder {
 
 #[axum::debug_handler]
 async fn new_order(
-    State(state): State<Arc<UsrState>>,
+    State(state): State<&'static UsrState>,
     Json(pending_order): Json<PendingOrder>,
 ) -> (StatusCode, &'static str) {
     let webhook_msg = format!(
@@ -82,59 +68,8 @@ async fn new_order(
 
     match result {
         Ok(m) => {    
-            let mut guard = BATCHED.lock();
-            guard.queue.insert(m.id, webhook_msg);
-            let was_none = guard.deadline.is_none();
-            guard.deadline = Some(Instant::now() + std::time::Duration::from_secs(60 * 5));
-    
-            if was_none {
-                drop(guard);
-                if state.new_orders_webhook.is_some() {
-                    tokio::spawn(async move {
-                        let new_orders_webhook = state.new_orders_webhook.as_ref().unwrap();
-                        loop {
-                            let deadline = BATCHED.lock().deadline.unwrap();
-                            tokio::time::sleep_until(deadline.into()).await;
-                            let queue;
-                            {
-                                let mut guard = BATCHED.lock();
-                                if guard.deadline.unwrap() != deadline {
-                                    continue;
-                                }
-                                let replacement = HashMap::with_capacity(guard.queue.capacity());
-                                queue = std::mem::replace(&mut guard.queue, replacement);
-                            }
-                            let mut running = String::new();
-                            for (_, msg) in queue {
-                                if running.len() + msg.len() + 1 < 2000 {
-                                    running.push_str(&msg);
-                                    running.push_str("\n");
-                                } else {
-                                    if let Err(e) = new_orders_webhook
-                                        .send(&Message::new(|message| message.content(running)))
-                                        .await
-                                    {
-                                        error!("Failed to trigger new-order webhook: {e}");
-                                    }
-                                    running = msg;
-                                }
-                            }
-                            if let Err(e) = new_orders_webhook
-                                .send(&Message::new(|message| message.content(running)))
-                                .await
-                            {
-                                error!("Failed to trigger new-order webhook: {e}");
-                            }
-                            let mut guard = BATCHED.lock();
-                            if guard.queue.is_empty() {
-                                guard.deadline = None;
-                                break;
-                            }
-                        }
-                    });
-                }
-            }
-    
+            backup_db(state);
+            state.new_orders_webhook.as_ref().map(|x| x.enqueue(m.id, webhook_msg));
             (StatusCode::OK, "")
         }
         Err(e) => {
@@ -159,7 +94,7 @@ pub struct ChangeOrder {
 
 #[axum::debug_handler]
 async fn change_order(
-    State(state): State<Arc<UsrState>>,
+    State(state): State<&'static UsrState>,
     Json(change_order): Json<ChangeOrder>,
 ) -> (StatusCode, &'static str) {
     match order_status::Entity::find().filter(order_status::Column::OrderId.eq(change_order.id)).order_by_desc(order_status::Column::InstanceId).one(&state.db).await {
@@ -202,23 +137,25 @@ async fn change_order(
         error!("Failed to change order: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
-        let mut guard = BATCHED.lock();
-        match guard.queue.entry(change_order.id) {
-            Entry::Occupied(mut entry) => {
-                entry.insert(webhook_msg);
-            }
-            Entry::Vacant(_) => {
-                tokio::spawn(async move {
-                    let Some(new_orders_webhook) = state.new_orders_webhook.as_ref() else { return; };
-                    if let Err(e) = new_orders_webhook
-                        .send(&Message::new(|message| message.content(webhook_msg)))
-                        .await
-                    {
-                        error!("Failed to trigger new-order webhook: {e}");
-                    }
-                });
-            }
-        }
+        backup_db(state);
+        state.new_orders_webhook.as_ref().map(|x| x.enqueue(change_order.id, webhook_msg));
+        // let mut guard = BATCHED.lock();
+        // match guard.queue.entry(change_order.id) {
+        //     Entry::Occupied(mut entry) => {
+        //         entry.insert(webhook_msg);
+        //     }
+        //     Entry::Vacant(_) => {
+        //         tokio::spawn(async move {
+        //             let Some(new_orders_webhook) = state.new_orders_webhook.as_ref() else { return; };
+        //             if let Err(e) = new_orders_webhook
+        //                 .send(&Message::new(|message| message.content(webhook_msg)))
+        //                 .await
+        //             {
+        //                 error!("Failed to trigger new-order webhook: {e}");
+        //             }
+        //         });
+        //     }
+        // }
         
         (StatusCode::OK, "")
     }
@@ -233,7 +170,7 @@ struct DeleteOrder {
 
 #[axum::debug_handler]
 async fn cancel_order(
-    State(state): State<Arc<UsrState>>,
+    State(state): State<&'static UsrState>,
     Json(DeleteOrder { id, force }): Json<DeleteOrder>,
 ) -> (StatusCode, &'static str) {
     let webhook_msg;
@@ -284,15 +221,8 @@ async fn cancel_order(
         return (StatusCode::INTERNAL_SERVER_ERROR, "");
     }
 
-    tokio::spawn(async move {
-        let Some(new_orders_webhook) = state.new_orders_webhook.as_ref() else { return; };
-        if let Err(e) = new_orders_webhook
-            .send(&Message::new(|message| message.content(webhook_msg)))
-            .await
-        {
-            error!("Failed to trigger new-order webhook: {e}");
-        }
-    });
+    state.new_orders_webhook.as_ref().map(|x| x.enqueue(id, webhook_msg));
+    backup_db(state);
 
     (StatusCode::OK, "")
 }
@@ -305,7 +235,7 @@ pub struct UpdateOrder {
 
 #[axum::debug_handler]
 async fn update_order(
-    State(state): State<Arc<UsrState>>,
+    State(state): State<&'static UsrState>,
     Json(update_order): Json<UpdateOrder>,
 ) -> (StatusCode, &'static str) {
     let webhook_msg;
@@ -369,22 +299,15 @@ async fn update_order(
         error!("Failed to update order status: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
-        tokio::spawn(async move {
-            let Some(order_updates_webhook) = state.order_updates_webhook.as_ref() else { return; };
-            if let Err(e) = order_updates_webhook
-                .send(&Message::new(|message| message.content(webhook_msg)))
-                .await
-            {
-                error!("Failed to trigger order-updates webhook: {e}");
-            }
-        });
+        state.order_updates_webhook.as_ref().map(|x| x.enqueue(update_order.id, webhook_msg));
+        backup_db(state);
         (StatusCode::OK, "")
     }
 }
 
 #[axum::debug_handler]
 async fn get_orders(
-    State(state): State<Arc<UsrState>>,
+    State(state): State<&'static UsrState>,
 ) -> Response {
     let result = order::Entity::find().all(&state.db).await;
 
@@ -412,7 +335,7 @@ async fn get_orders(
     }
 }
 
-pub fn router() -> Router<Arc<UsrState>> {
+pub fn router() -> Router<&'static UsrState> {
     Router::new()
         .route("/new/order", post(new_order))
         .route("/change/order", post(change_order))

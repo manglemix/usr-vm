@@ -1,5 +1,5 @@
 use std::{
-    backtrace::Backtrace, io::{LineWriter, Write}, net::SocketAddr, panic::set_hook, path::Path, sync::Arc
+    backtrace::Backtrace, io::{LineWriter, Write}, net::SocketAddr, panic::set_hook, path::Path, sync::atomic::AtomicBool
 };
 
 use axum::{routing::get, Router};
@@ -12,9 +12,12 @@ use tower::ServiceBuilder;
 use tower_http::cors::Any;
 use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
+use webhook::BatchedWebhook;
 
 mod scheduler;
 mod manifest;
+mod webhook;
+mod backup;
 
 struct LogWriter {
     inner: &'static Mutex<LineWriter<std::fs::File>>,
@@ -42,8 +45,9 @@ struct Config {
 
 struct UsrState {
     db: DatabaseConnection,
-    new_orders_webhook: Option<DiscordWebhook>,
-    order_updates_webhook: Option<DiscordWebhook>,
+    new_orders_webhook: Option<BatchedWebhook>,
+    order_updates_webhook: Option<BatchedWebhook>,
+    backup_task_running: AtomicBool
 }
 
 #[tokio::main]
@@ -140,23 +144,24 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .layer(tower_http::compression::CompressionLayer::new())
         )
-        .with_state(Arc::new(UsrState {
+        .with_state(Box::leak(Box::new(UsrState {
             db,
             new_orders_webhook: {
                 if let Some(new_orders_webhook) = config.new_orders_webhook {
-                    Some(DiscordWebhook::new(new_orders_webhook)?)
+                    Some(DiscordWebhook::new(new_orders_webhook)?.into())
                 } else {
                     None
                 }
             },
             order_updates_webhook: {
                 if let Some(order_updates_webhook) = config.order_updates_webhook {
-                    Some(DiscordWebhook::new(order_updates_webhook)?)
+                    Some(DiscordWebhook::new(order_updates_webhook)?.into())
                 } else {
                     None
                 }
             },
-        }));
+            backup_task_running: AtomicBool::new(false),
+        })));
 
     default_provider()
         .install_default()
