@@ -525,19 +525,33 @@
 			{@render cost("Mechanical")}
 			{@render cost("Electrical")}
 
-			<section class="flex flex-row gap-4 w-min p-4" style:min-height="20rem" style:background-color="darkgray">
-				{#snippet bar(team: string)}
-					<div class="flex flex-col">
-						<div class="flex flex-col justify-end flex-grow">
-							<div style:background-color="darkred" style:height={`calc(100% * ${expenditures[team] / maxExpenditure})`}>
-							</div>
+			<section class="flex flex-col w-min" style:background-color="darkgray">
+				<div class="relative flex flex-row gap-10 w-min pt-8 pr-8 pl-16" style:min-height="20rem">
+					{#each { length: Math.floor(maxExpenditure / 100) + 1 } as _, i}
+						<div class="absolute flex flex-row" style:width={"calc(100% - 4rem)"} style:right="1rem" style:bottom={`calc((100% - 2rem) * ${i*100 / maxExpenditure})`}>
+							<div class="w-full border-t-2 border-black"></div>
+							<p class="absolute mr-2" style:bottom="-0.75rem" style:right="100%">${i * 100}</p>
 						</div>
-						<p>{team}</p>
-					</div>
-				{/snippet}
-				{@render bar("Software")}
-				{@render bar("Mechanical")}
-				{@render bar("Electrical")}
+					{/each}
+
+					{#snippet bar(team: string)}
+						<div class="flex flex-col" style:z-index=1>
+							<div class="flex flex-col justify-end flex-grow items-center">
+								<div style:background-color="darkred" style:height={`calc(100% * ${expenditures[team] / maxExpenditure})`} style:width="3rem">
+								</div>
+							</div>
+							<!-- <p>{team}</p> -->
+						</div>
+					{/snippet}
+					{@render bar("Software")}
+					{@render bar("Mechanical")}
+					{@render bar("Electrical")}
+				</div>
+				<div class="ml-14 flex flex-row gap-4">
+					<p>Software</p>
+					<p>Mechanical</p>
+					<p>Electrical</p>
+				</div>
 			</section>
 		{/if}
 	</section>
