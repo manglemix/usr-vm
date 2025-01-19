@@ -525,6 +525,10 @@
 			{@render cost("Software")}
 			{@render cost("Mechanical")}
 			{@render cost("Electrical")}
+			<p>Club Total: {(Object.values(expenditures).reduce((a, b) => a + b)).toLocaleString(
+				'en-US',
+				{ style: 'currency', currency: 'USD' }
+			)}</p>
 
 			<section class="flex flex-col w-min" style:background-color="darkgray">
 				<div class="relative flex flex-row gap-10 w-min pt-8 pr-8 pl-20" style:min-height="20rem">
