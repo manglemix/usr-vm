@@ -665,7 +665,7 @@
 		color: blue;
 	}
 	.table-fix-head {
-		max-height: 25rem;
+		max-height: 35rem;
 		overflow-y: scroll;
 	}
 	.table-fix-head thead th {
