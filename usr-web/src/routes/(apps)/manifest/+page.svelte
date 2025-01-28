@@ -361,15 +361,6 @@
 		{#if tabIndex === 0}
 			{@render input()}
 
-			<label>
-				Ref Number
-				<input
-					type="number"
-					bind:value={change_order_ref_number}
-					placeholder="Reference Number"
-				/>
-			</label>
-
 			<button
 				onclick={async () => {
 					if (
@@ -417,6 +408,16 @@
 				{@render selectAnOrder()}
 			{:else}
 				{@render input()}
+
+				<label>
+					Ref Number
+					<input
+						type="number"
+						bind:value={change_order_ref_number}
+						placeholder="Reference Number"
+					/>
+				</label>
+				
 				<button
 					onclick={async () => {
 						if (
