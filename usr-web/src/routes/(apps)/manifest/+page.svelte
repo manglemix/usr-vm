@@ -26,6 +26,7 @@
 		reason: string;
 		vendor: string;
 		link: string;
+		reference_number?: number;
 	}
 	let orders: Order[] = $state([]);
 	let expenditures: Record<string, number> = $state({});
@@ -236,6 +237,7 @@
 								currency: 'USD'
 							})}</td
 						>
+						<td>{order.reference_number ?? ''}</td>
 					</tr>
 				{/if}
 			{/each}
