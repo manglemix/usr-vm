@@ -1,8 +1,14 @@
 use axum::{
-    extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, get, post}, Json, Router
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{delete, get, post},
+    Json, Router,
 };
 use sea_orm::{
-    prelude::Decimal, sea_query::Table, sqlx::types::chrono::Local, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Schema, TransactionTrait
+    prelude::Decimal, sea_query::Table, sqlx::types::chrono::Local, ActiveModelTrait, ActiveValue,
+    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Schema,
+    TransactionTrait,
 };
 use serde::Deserialize;
 use tracing::error;
@@ -52,25 +58,33 @@ async fn new_order(
         link: ActiveValue::Set(pending_order.link),
         ref_number: ActiveValue::NotSet,
     };
-    let result = state.db.transaction(|tx| Box::pin(async move {
-        let model = active_model.insert(tx).await?;
+    let result = state
+        .db
+        .transaction(|tx| {
+            Box::pin(async move {
+                let model = active_model.insert(tx).await?;
 
-        let active_model = order_status::ActiveModel {
-            order_id: ActiveValue::Set(model.id),
-            instance_id: ActiveValue::NotSet,
-            date: ActiveValue::Set(Local::now().naive_local()),
-            status: ActiveValue::Set(order_status::Status::New),
-        };
+                let active_model = order_status::ActiveModel {
+                    order_id: ActiveValue::Set(model.id),
+                    instance_id: ActiveValue::NotSet,
+                    date: ActiveValue::Set(Local::now().naive_local()),
+                    status: ActiveValue::Set(order_status::Status::New),
+                };
 
-        active_model.insert(tx).await?;
+                active_model.insert(tx).await?;
 
-        Result::<_, sea_orm::DbErr>::Ok(model)
-    })).await;
+                Result::<_, sea_orm::DbErr>::Ok(model)
+            })
+        })
+        .await;
 
     match result {
-        Ok(m) => {    
+        Ok(m) => {
             backup_db(state);
-            state.new_orders_webhook.as_ref().map(|x| x.enqueue(m.id, webhook_msg));
+            state
+                .new_orders_webhook
+                .as_ref()
+                .map(|x| x.enqueue(m.id, webhook_msg));
             (StatusCode::OK, "")
         }
         Err(e) => {
@@ -91,7 +105,6 @@ pub struct ChangeOrder {
     pub reason: String,
     pub vendor: String,
     pub link: String,
-    pub ref_number: Option<u32>
 }
 
 #[axum::debug_handler]
@@ -99,7 +112,12 @@ async fn change_order(
     State(state): State<&'static UsrState>,
     Json(change_order): Json<ChangeOrder>,
 ) -> (StatusCode, &'static str) {
-    match order_status::Entity::find().filter(order_status::Column::OrderId.eq(change_order.id)).order_by_desc(order_status::Column::InstanceId).one(&state.db).await {
+    match order_status::Entity::find()
+        .filter(order_status::Column::OrderId.eq(change_order.id))
+        .order_by_desc(order_status::Column::InstanceId)
+        .one(&state.db)
+        .await
+    {
         Ok(Some(model)) => {
             if model.status != order_status::Status::New {
                 return (StatusCode::BAD_REQUEST, "Order has already been processed");
@@ -134,32 +152,17 @@ async fn change_order(
         reason: ActiveValue::Set(change_order.reason),
         vendor: ActiveValue::Set(change_order.vendor),
         link: ActiveValue::Set(change_order.link),
-        ref_number: ActiveValue::Set(change_order.ref_number)
+        ref_number: ActiveValue::NotSet,
     };
     if let Err(e) = active_model.update(&state.db).await {
         error!("Failed to change order: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
         backup_db(state);
-        state.new_orders_webhook.as_ref().map(|x| x.enqueue(change_order.id, webhook_msg));
-        // let mut guard = BATCHED.lock();
-        // match guard.queue.entry(change_order.id) {
-        //     Entry::Occupied(mut entry) => {
-        //         entry.insert(webhook_msg);
-        //     }
-        //     Entry::Vacant(_) => {
-        //         tokio::spawn(async move {
-        //             let Some(new_orders_webhook) = state.new_orders_webhook.as_ref() else { return; };
-        //             if let Err(e) = new_orders_webhook
-        //                 .send(&Message::new(|message| message.content(webhook_msg)))
-        //                 .await
-        //             {
-        //                 error!("Failed to trigger new-order webhook: {e}");
-        //             }
-        //         });
-        //     }
-        // }
-        
+        state
+            .new_orders_webhook
+            .as_ref()
+            .map(|x| x.enqueue(change_order.id, webhook_msg));
         (StatusCode::OK, "")
     }
 }
@@ -168,7 +171,7 @@ async fn change_order(
 struct DeleteOrder {
     id: u32,
     #[serde(default)]
-    force: bool
+    force: bool,
 }
 
 #[axum::debug_handler]
@@ -178,7 +181,12 @@ async fn cancel_order(
 ) -> (StatusCode, &'static str) {
     let webhook_msg;
 
-    match order_status::Entity::find().filter(order_status::Column::OrderId.eq(id)).order_by_desc(order_status::Column::InstanceId).one(&state.db).await {
+    match order_status::Entity::find()
+        .filter(order_status::Column::OrderId.eq(id))
+        .order_by_desc(order_status::Column::InstanceId)
+        .one(&state.db)
+        .await
+    {
         Ok(Some(model)) => {
             if !force && model.status != order_status::Status::New {
                 return (StatusCode::BAD_REQUEST, "Order has already been processed");
@@ -193,9 +201,7 @@ async fn cancel_order(
             };
             webhook_msg = format!(
                 "***Order Cancelled***\n**Name:** {}\n**Count:** {}\n**Team:** {}",
-                model.name,
-                model.count,
-                model.team,
+                model.name, model.count, model.team,
             );
         }
         Ok(None) => {
@@ -208,23 +214,33 @@ async fn cancel_order(
     }
 
     if force {
-        let result = state.db.transaction(|tx| Box::pin(async move {
-            order::Entity::delete_by_id(id).exec(tx).await?;
-            order_status::Entity::delete_many().filter(order_status::Column::OrderId.eq(id)).exec(tx).await?;
-            Result::<_, sea_orm::DbErr>::Ok(())
-        })).await;
+        let result = state
+            .db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    order::Entity::delete_by_id(id).exec(tx).await?;
+                    order_status::Entity::delete_many()
+                        .filter(order_status::Column::OrderId.eq(id))
+                        .exec(tx)
+                        .await?;
+                    Result::<_, sea_orm::DbErr>::Ok(())
+                })
+            })
+            .await;
 
         if let Err(e) = result {
             error!("Failed to force delete order: {e}");
             return (StatusCode::INTERNAL_SERVER_ERROR, "");
         }
-
     } else if let Err(e) = order::Entity::delete_by_id(id).exec(&state.db).await {
         error!("Failed to delete order: {e}");
         return (StatusCode::INTERNAL_SERVER_ERROR, "");
     }
 
-    state.new_orders_webhook.as_ref().map(|x| x.enqueue(id, webhook_msg));
+    state
+        .new_orders_webhook
+        .as_ref()
+        .map(|x| x.enqueue(id, webhook_msg));
     backup_db(state);
 
     (StatusCode::OK, "")
@@ -233,7 +249,8 @@ async fn cancel_order(
 #[derive(Deserialize)]
 pub struct UpdateOrder {
     pub id: u32,
-    pub status: order_status::Status
+    pub status: order_status::Status,
+    pub ref_number: Option<u32>,
 }
 
 #[axum::debug_handler]
@@ -243,7 +260,12 @@ async fn update_order(
 ) -> (StatusCode, &'static str) {
     let webhook_msg;
 
-    match order_status::Entity::find().filter(order_status::Column::OrderId.eq(update_order.id)).order_by_desc(order_status::Column::InstanceId).one(&state.db).await {
+    match order_status::Entity::find()
+        .filter(order_status::Column::OrderId.eq(update_order.id))
+        .order_by_desc(order_status::Column::InstanceId)
+        .one(&state.db)
+        .await
+    {
         Ok(Some(model)) => {
             if model.status == order_status::Status::InStorage {
                 return (StatusCode::BAD_REQUEST, "Order is already in storage");
@@ -251,7 +273,10 @@ async fn update_order(
             if model.status == update_order.status {
                 return (StatusCode::BAD_REQUEST, "Order is already in that state");
             }
-            let model = match order::Entity::find_by_id(update_order.id).one(&state.db).await {
+            let model = match order::Entity::find_by_id(update_order.id)
+                .one(&state.db)
+                .await
+            {
                 Ok(Some(model)) => model,
                 Ok(None) => unreachable!(),
                 Err(e) => {
@@ -263,23 +288,18 @@ async fn update_order(
                 if model.store_in.is_empty() {
                     webhook_msg = format!(
                         "**Order Complete!**\n**Name:** {}\n**Team:** {}",
-                        model.name,
-                        model.team
+                        model.name, model.team
                     );
                 } else {
                     webhook_msg = format!(
                         "**Order Complete!**\n**Name:** {}\n**Team:** {}\n**Location:** {}",
-                        model.name,
-                        model.team,
-                        model.store_in
+                        model.name, model.team, model.store_in
                     );
                 }
             } else {
                 webhook_msg = format!(
                     "**Order Update!**\n**Name:** {}\n**Team:** {}\n**Status:** {}",
-                    model.name,
-                    model.team,
-                    update_order.status
+                    model.name, model.team, update_order.status
                 );
             }
         }
@@ -291,27 +311,55 @@ async fn update_order(
             return (StatusCode::INTERNAL_SERVER_ERROR, "");
         }
     }
-    
-    let active_model = order_status::ActiveModel {
-        order_id: ActiveValue::Set(update_order.id),
-        instance_id: ActiveValue::NotSet,
-        date: ActiveValue::Set(Local::now().naive_local()),
-        status: ActiveValue::Set(update_order.status),
-    };
-    if let Err(e) = active_model.insert(&state.db).await {
+
+    let result = state
+        .db
+        .transaction(|tx| {
+            Box::pin(async move {
+                let active_model = order_status::ActiveModel {
+                    order_id: ActiveValue::Set(update_order.id),
+                    instance_id: ActiveValue::NotSet,
+                    date: ActiveValue::Set(Local::now().naive_local()),
+                    status: ActiveValue::Set(update_order.status),
+                };
+
+                active_model.insert(tx).await?;
+
+                let active_model = order::ActiveModel {
+                    id: ActiveValue::Unchanged(update_order.id),
+                    name: ActiveValue::NotSet,
+                    count: ActiveValue::NotSet,
+                    unit_cost: ActiveValue::NotSet,
+                    store_in: ActiveValue::NotSet,
+                    team: ActiveValue::NotSet,
+                    reason: ActiveValue::NotSet,
+                    vendor: ActiveValue::NotSet,
+                    link: ActiveValue::NotSet,
+                    ref_number: ActiveValue::Set(update_order.ref_number),
+                };
+
+                active_model.insert(tx).await?;
+
+                Result::<_, sea_orm::DbErr>::Ok(())
+            })
+        })
+        .await;
+
+    if let Err(e) = result {
         error!("Failed to update order status: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
-        state.order_updates_webhook.as_ref().map(|x| x.enqueue(update_order.id, webhook_msg));
+        state
+            .order_updates_webhook
+            .as_ref()
+            .map(|x| x.enqueue(update_order.id, webhook_msg));
         backup_db(state);
         (StatusCode::OK, "")
     }
 }
 
 #[axum::debug_handler]
-async fn get_orders(
-    State(state): State<&'static UsrState>,
-) -> Response {
+async fn get_orders(State(state): State<&'static UsrState>) -> Response {
     let result = order::Entity::find().all(&state.db).await;
 
     match result {
@@ -319,12 +367,11 @@ async fn get_orders(
             let result = order_status::Entity::find().all(&state.db).await;
 
             match result {
-                Ok(statuses) => {
-                    Json(serde_json::json!({
-                        "orders": orders,
-                        "statuses": statuses
-                    })).into_response()
-                }
+                Ok(statuses) => Json(serde_json::json!({
+                    "orders": orders,
+                    "statuses": statuses
+                }))
+                .into_response(),
                 Err(e) => {
                     error!("Failed to get orders: {e}");
                     (StatusCode::INTERNAL_SERVER_ERROR, "").into_response()
