@@ -259,7 +259,7 @@ async fn update_order(
     Json(update_order): Json<UpdateOrder>,
 ) -> (StatusCode, &'static str) {
     let webhook_msg;
-    let mut dont_webhook = false;
+    let mut same_status = false;
 
     match order_status::Entity::find()
         .filter(order_status::Column::OrderId.eq(update_order.id))
@@ -275,7 +275,7 @@ async fn update_order(
                 if update_order.ref_number.is_none() {
                     return (StatusCode::BAD_REQUEST, "Order is already in that state");
                 }
-                dont_webhook = true;
+                same_status = true;
             }
             let model = match order::Entity::find_by_id(update_order.id)
                 .one(&state.db)
@@ -320,14 +320,16 @@ async fn update_order(
         .db
         .transaction(|tx| {
             Box::pin(async move {
-                let active_model = order_status::ActiveModel {
-                    order_id: ActiveValue::Set(update_order.id),
-                    instance_id: ActiveValue::NotSet,
-                    date: ActiveValue::Set(Local::now().naive_local()),
-                    status: ActiveValue::Set(update_order.status),
-                };
-
-                active_model.insert(tx).await?;
+                if !same_status {
+                    let active_model = order_status::ActiveModel {
+                        order_id: ActiveValue::Set(update_order.id),
+                        instance_id: ActiveValue::NotSet,
+                        date: ActiveValue::Set(Local::now().naive_local()),
+                        status: ActiveValue::Set(update_order.status),
+                    };
+    
+                    active_model.insert(tx).await?;
+                }
 
                 let active_model = order::ActiveModel {
                     id: ActiveValue::Unchanged(update_order.id),
@@ -353,7 +355,7 @@ async fn update_order(
         error!("Failed to update order status: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
-        if !dont_webhook {
+        if !same_status {
             state
                 .order_updates_webhook
                 .as_ref()
