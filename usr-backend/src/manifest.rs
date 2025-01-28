@@ -259,6 +259,7 @@ async fn update_order(
     Json(update_order): Json<UpdateOrder>,
 ) -> (StatusCode, &'static str) {
     let webhook_msg;
+    let mut dont_webhook = false;
 
     match order_status::Entity::find()
         .filter(order_status::Column::OrderId.eq(update_order.id))
@@ -271,7 +272,10 @@ async fn update_order(
                 return (StatusCode::BAD_REQUEST, "Order is already in storage");
             }
             if model.status == update_order.status {
-                return (StatusCode::BAD_REQUEST, "Order is already in that state");
+                if update_order.ref_number.is_none() {
+                    return (StatusCode::BAD_REQUEST, "Order is already in that state");
+                }
+                dont_webhook = true;
             }
             let model = match order::Entity::find_by_id(update_order.id)
                 .one(&state.db)
@@ -349,10 +353,12 @@ async fn update_order(
         error!("Failed to update order status: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, "")
     } else {
-        state
-            .order_updates_webhook
-            .as_ref()
-            .map(|x| x.enqueue(update_order.id, webhook_msg));
+        if !dont_webhook {
+            state
+                .order_updates_webhook
+                .as_ref()
+                .map(|x| x.enqueue(update_order.id, webhook_msg));
+        }
         backup_db(state);
         (StatusCode::OK, "")
     }
