@@ -3,7 +3,7 @@
 	import { PUBLIC_API_ENDPOINT } from '$env/static/public';
 	import type { Team } from '$lib';
 
-	let hideInStorage = $state(false);
+	let hideInStorage = $state(true);
 	let selectedOrderId: number | null = $state(null);
 	let selectedOrderIndex: number = $state(0);
 	let fetching = $state(false);
