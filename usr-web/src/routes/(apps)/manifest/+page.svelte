@@ -88,7 +88,7 @@
 	let pending_order_store_in: string = $state('');
 	let pending_order_team: Team | '' = $state('');
 	let pending_order_reason = $state('');
-	let change_order_ref_number: number | undefined = $state(undefined);
+	let update_order_ref_number: number | undefined = $state(undefined);
 	let updated_order_status: OrderStatus['status'] | '' = $state('');
 
 	function populatePending() {
@@ -102,6 +102,7 @@
 			pending_order_store_in = order.store_in;
 			pending_order_team = order.team;
 			pending_order_reason = order.reason;
+			update_order_ref_number = order.reference_number;
 		}
 	}
 
@@ -124,13 +125,24 @@
 	}
 
 	function exportCSV() {
-		const header = ['Name', 'Vendor', 'Link', 'Count', 'Unit Cost', 'Store In', 'Team', 'Reason', 'Subtotal', 'Status'];
+		const header = [
+			'Name',
+			'Vendor',
+			'Link',
+			'Count',
+			'Unit Cost',
+			'Store In',
+			'Team',
+			'Reason',
+			'Subtotal',
+			'Status'
+		];
 		const lines = [header.join(',')];
 
 		for (const o of orders) {
 			const st = statuses
-				.filter(s => s.order_id === o.id)
-				.map(s => {
+				.filter((s) => s.order_id === o.id)
+				.map((s) => {
 					const date = s.date as Date;
 					const day = String(date.getDate()).padStart(2, '0');
 					const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -139,18 +151,11 @@
 				})
 				.join(',');
 			const sub = (o.count * (o.unit_cost as number)).toFixed(2);
-			lines.push([
-				o.name,
-				o.vendor,
-				o.link,
-				o.count,
-				o.unit_cost,
-				o.store_in,
-				o.team,
-				o.reason,
-				sub,
-				st,
-			].map(String).join(','));
+			lines.push(
+				[o.name, o.vendor, o.link, o.count, o.unit_cost, o.store_in, o.team, o.reason, sub, st]
+					.map(String)
+					.join(',')
+			);
 		}
 
 		const csv = new Blob([lines.join('\n')], { type: 'text/csv' });
@@ -215,12 +220,17 @@
 						<td class="order-name">{order.name}</td>
 						<td class="order-status">
 							{#each statusesOf(order.id) as status}
-								<p><span class="italic">{status.status}</span>: {status.date.toLocaleString('en-US', {
-									weekday: 'short',
-									year: 'numeric',
-									month: 'long',
-									day: 'numeric'
-								})}</p>
+								<p>
+									<span class="italic">{status.status}</span>: {status.date.toLocaleString(
+										'en-US',
+										{
+											weekday: 'short',
+											year: 'numeric',
+											month: 'long',
+											day: 'numeric'
+										}
+									)}
+								</p>
 							{/each}
 						</td>
 						<td class="order-vendor">{order.vendor}</td>
@@ -389,7 +399,7 @@
 							team: pending_order_team,
 							reason: pending_order_reason,
 							store_in: pending_order_store_in,
-							change_order_ref_number
+							change_order_ref_number: update_order_ref_number
 						})
 					});
 					if (response.ok) {
@@ -409,15 +419,6 @@
 			{:else}
 				{@render input()}
 
-				<label>
-					Ref Number
-					<input
-						type="number"
-						bind:value={change_order_ref_number}
-						placeholder="Reference Number"
-					/>
-				</label>
-				
 				<button
 					onclick={async () => {
 						if (
@@ -474,6 +475,14 @@
 					<option value="Delivered">Delivered</option>
 					<option value="InStorage">In Storage</option>
 				</select>
+				<label>
+					Ref Number
+					<input
+						type="number"
+						bind:value={update_order_ref_number}
+						placeholder="Reference Number"
+					/>
+				</label>
 
 				<button
 					onclick={async () => {
@@ -488,7 +497,8 @@
 							},
 							body: JSON.stringify({
 								id: selectedOrderId,
-								status: updated_order_status
+								status: updated_order_status,
+								ref_number: update_order_ref_number
 							})
 						});
 						if (response.ok) {
@@ -532,39 +542,52 @@
 			{/if}
 		{:else if tabIndex === 4}
 			{#snippet cost(team: string)}
-				<p>{team} Total: {(expenditures[team] ?? 0).toLocaleString(
-					'en-US',
-					{ style: 'currency', currency: 'USD' }
-				)}</p>
+				<p>
+					{team} Total: {(expenditures[team] ?? 0).toLocaleString('en-US', {
+						style: 'currency',
+						currency: 'USD'
+					})}
+				</p>
 			{/snippet}
-			{@render cost("Software")}
-			{@render cost("Mechanical")}
-			{@render cost("Electrical")}
-			<p>Club Total: {(Object.values(expenditures).reduce((a, b) => a + b)).toLocaleString(
-				'en-US',
-				{ style: 'currency', currency: 'USD' }
-			)}</p>
+			{@render cost('Software')}
+			{@render cost('Mechanical')}
+			{@render cost('Electrical')}
+			<p>
+				Club Total: {Object.values(expenditures)
+					.reduce((a, b) => a + b)
+					.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+			</p>
 
-			<section class="flex flex-col w-min" style:background-color="darkgray">
-				<div class="relative flex flex-row gap-10 w-min pt-8 pr-8 pl-20" style:min-height="20rem">
+			<section class="flex w-min flex-col" style:background-color="darkgray">
+				<div class="relative flex w-min flex-row gap-10 pl-20 pr-8 pt-8" style:min-height="20rem">
 					{#each { length: Math.floor(maxExpenditure / costIncrement) + 1 } as _, i}
-						<div class="absolute flex flex-row" style:width={"calc(100% - 5rem)"} style:right="1rem" style:bottom={`calc((100% - 2rem) * ${i*costIncrement / maxExpenditure})`}>
+						<div
+							class="absolute flex flex-row"
+							style:width={'calc(100% - 5rem)'}
+							style:right="1rem"
+							style:bottom={`calc((100% - 2rem) * ${(i * costIncrement) / maxExpenditure})`}
+						>
 							<div class="w-full border-t-2 border-black"></div>
-							<p class="absolute mr-2" style:bottom="-0.75rem" style:right="100%">${i * costIncrement}</p>
+							<p class="absolute mr-2" style:bottom="-0.75rem" style:right="100%">
+								${i * costIncrement}
+							</p>
 						</div>
 					{/each}
 
 					{#snippet bar(team: string)}
-						<div class="flex flex-col" style:z-index=1>
-							<div class="flex flex-col justify-end flex-grow items-center">
-								<div style:background-color="darkred" style:height={`calc(100% * ${expenditures[team] / maxExpenditure})`} style:width="3rem">
-								</div>
+						<div class="flex flex-col" style:z-index="1">
+							<div class="flex flex-grow flex-col items-center justify-end">
+								<div
+									style:background-color="darkred"
+									style:height={`calc(100% * ${expenditures[team] / maxExpenditure})`}
+									style:width="3rem"
+								></div>
 							</div>
 						</div>
 					{/snippet}
-					{@render bar("Software")}
-					{@render bar("Mechanical")}
-					{@render bar("Electrical")}
+					{@render bar('Software')}
+					{@render bar('Mechanical')}
+					{@render bar('Electrical')}
 				</div>
 				<div class="flex flex-row gap-4" style:margin-left="4.5rem">
 					<p>Software</p>
