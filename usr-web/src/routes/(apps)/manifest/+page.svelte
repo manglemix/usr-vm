@@ -188,6 +188,7 @@
 			<button onclick={exportCSV}> Export CSV </button>
 		</div>
 	</div>
+	<div class="table-fix-head">
 	<table>
 		<thead>
 			<tr>
@@ -254,6 +255,7 @@
 			{/each}
 		</tbody>
 	</table>
+</div>
 </section>
 
 <section id="order-operations" class="mt-4">
@@ -641,6 +643,7 @@
 	}
 	#order-operations-content {
 		background-color: lightgray;
+		min-height: 30rem;
 	}
 	#order-operations-content > button {
 		background-color: darkgray;
@@ -660,5 +663,13 @@
 	table a {
 		text-decoration: underline;
 		color: blue;
+	}
+	.table-fix-head {
+		max-height: 25rem;
+		overflow-y: scroll;
+	}
+	.table-fix-head thead th {
+		position: sticky;
+		top: 0px;
 	}
 </style>
