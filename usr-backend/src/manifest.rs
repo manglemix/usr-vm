@@ -30,7 +30,7 @@ async fn new_order(
     Json(pending_order): Json<PendingOrder>,
 ) -> (StatusCode, &'static str) {
     let webhook_msg = format!(
-        ">>> **New Order!**\n**Name:** {}\n**Vendor:** {}\n**Link:** {}\n**Count:** {}\n**Unit Cost:** ${}\n**Subtotal:** ${}\n**Team:** {}\n**Reason:** {}",
+        "**New Order!**\n**Name:** {}\n**Vendor:** {}\n**Link:** {}\n**Count:** {}\n**Unit Cost:** ${}\n**Subtotal:** ${}\n**Team:** {}\n**Reason:** {}",
         pending_order.name,
         pending_order.vendor,
         pending_order.link,
@@ -50,6 +50,7 @@ async fn new_order(
         reason: ActiveValue::Set(pending_order.reason),
         vendor: ActiveValue::Set(pending_order.vendor),
         link: ActiveValue::Set(pending_order.link),
+        ref_number: ActiveValue::NotSet,
     };
     let result = state.db.transaction(|tx| Box::pin(async move {
         let model = active_model.insert(tx).await?;
@@ -90,6 +91,7 @@ pub struct ChangeOrder {
     pub reason: String,
     pub vendor: String,
     pub link: String,
+    pub ref_number: Option<u32>
 }
 
 #[axum::debug_handler]
@@ -112,7 +114,7 @@ async fn change_order(
         }
     }
     let webhook_msg = format!(
-        ">>> ***Order Changed***\n**Name:** {}\n**Vendor:** {}\n**Link:** {}\n**Count:** {}\n**Unit Cost:** ${}\n**Subtotal:** ${}\n**Team:** {}\n**Reason:** {}",
+        "***Order Changed***\n**Name:** {}\n**Vendor:** {}\n**Link:** {}\n**Count:** {}\n**Unit Cost:** ${}\n**Subtotal:** ${}\n**Team:** {}\n**Reason:** {}",
         change_order.name,
         change_order.vendor,
         change_order.link,
@@ -132,6 +134,7 @@ async fn change_order(
         reason: ActiveValue::Set(change_order.reason),
         vendor: ActiveValue::Set(change_order.vendor),
         link: ActiveValue::Set(change_order.link),
+        ref_number: ActiveValue::Set(change_order.ref_number)
     };
     if let Err(e) = active_model.update(&state.db).await {
         error!("Failed to change order: {e}");
@@ -189,7 +192,7 @@ async fn cancel_order(
                 }
             };
             webhook_msg = format!(
-                ">>> ***Order Cancelled***\n**Name:** {}\n**Count:** {}\n**Team:** {}",
+                "***Order Cancelled***\n**Name:** {}\n**Count:** {}\n**Team:** {}",
                 model.name,
                 model.count,
                 model.team,
@@ -259,13 +262,13 @@ async fn update_order(
             if update_order.status == order_status::Status::InStorage {
                 if model.store_in.is_empty() {
                     webhook_msg = format!(
-                        ">>> **Order Complete!**\n**Name:** {}\n**Team:** {}",
+                        "**Order Complete!**\n**Name:** {}\n**Team:** {}",
                         model.name,
                         model.team
                     );
                 } else {
                     webhook_msg = format!(
-                        ">>> **Order Complete!**\n**Name:** {}\n**Team:** {}\n**Location:** {}",
+                        "**Order Complete!**\n**Name:** {}\n**Team:** {}\n**Location:** {}",
                         model.name,
                         model.team,
                         model.store_in
@@ -273,7 +276,7 @@ async fn update_order(
                 }
             } else {
                 webhook_msg = format!(
-                    ">>> **Order Update!**\n**Name:** {}\n**Team:** {}\n**Status:** {}",
+                    "**Order Update!**\n**Name:** {}\n**Team:** {}\n**Status:** {}",
                     model.name,
                     model.team,
                     update_order.status

@@ -3,5 +3,6 @@
 *.log
 .reset-db
 *.sqlite
+*.sqlite.backup
 /config.json
 /.env

@@ -16,6 +16,9 @@ pub struct Model {
     pub reason: String,
     pub vendor: String,
     pub link: String,
+    #[sea_orm(nullable)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ref_number: Option<u32>
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

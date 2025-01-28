@@ -36,7 +36,7 @@ impl BatchedWebhook {
                         let replacement = HashMap::with_capacity(guard.queue.capacity());
                         queue = std::mem::replace(&mut guard.queue, replacement);
                     }
-                    let mut running = String::new();
+                    let mut running = String::from(">>> ");
                     for (_, msg) in queue {
                         if running.len() + msg.len() + 1 < 2000 {
                             running.push_str(&msg);
@@ -48,7 +48,8 @@ impl BatchedWebhook {
                             {
                                 error!("Failed to trigger webhook: {e}");
                             }
-                            running = msg;
+                            running = String::from(">>> ");
+                            running.push_str(&msg);
                         }
                     }
                     if let Err(e) = self.discord
