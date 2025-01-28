@@ -87,6 +87,7 @@
 	let pending_order_store_in: string = $state('');
 	let pending_order_team: Team | '' = $state('');
 	let pending_order_reason = $state('');
+	let change_order_ref_number: number | undefined = $state(undefined);
 	let updated_order_status: OrderStatus['status'] | '' = $state('');
 
 	function populatePending() {
@@ -357,6 +358,15 @@
 		{#if tabIndex === 0}
 			{@render input()}
 
+			<label>
+				Ref Number
+				<input
+					type="number"
+					bind:value={change_order_ref_number}
+					placeholder="Reference Number"
+				/>
+			</label>
+
 			<button
 				onclick={async () => {
 					if (
@@ -384,7 +394,8 @@
 							unit_cost: pending_order_unit_cost,
 							team: pending_order_team,
 							reason: pending_order_reason,
-							store_in: pending_order_store_in
+							store_in: pending_order_store_in,
+							change_order_ref_number
 						})
 					});
 					if (response.ok) {
