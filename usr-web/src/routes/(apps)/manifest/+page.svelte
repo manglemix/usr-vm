@@ -26,7 +26,7 @@
 		reason: string;
 		vendor: string;
 		link: string;
-		reference_number?: number;
+		ref_number?: number;
 	}
 	let orders: Order[] = $state([]);
 	let expenditures: Record<string, number> = $state({});
@@ -102,7 +102,7 @@
 			pending_order_store_in = order.store_in;
 			pending_order_team = order.team;
 			pending_order_reason = order.reason;
-			update_order_ref_number = order.reference_number;
+			update_order_ref_number = order.ref_number;
 		}
 	}
 
@@ -248,7 +248,7 @@
 								currency: 'USD'
 							})}</td
 						>
-						<td>{order.reference_number ?? ''}</td>
+						<td>{order.ref_number ?? ''}</td>
 					</tr>
 				{/if}
 			{/each}
