@@ -22,7 +22,7 @@ async fn add_attendance(
     State(state): State<&'static UsrState>,
     Form(CheckIn { uid }): Form<CheckIn>,
 ) -> (StatusCode, &'static str) {
-    let Some(uid) = uid.strip_prefix('u') else {
+    let Some(uid) = uid.strip_prefix('u').or_else(|| uid.strip_prefix('U')) else {
         return (StatusCode::BAD_REQUEST, "");
     };
     let Ok(uid) = uid.parse::<u32>() else {

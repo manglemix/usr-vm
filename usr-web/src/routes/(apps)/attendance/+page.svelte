@@ -1,5 +1,6 @@
 <script lang=ts>
 	import { PUBLIC_API_ENDPOINT } from '$env/static/public';
+    let uid = $state("");
 </script>
 
 <!-- This iframe prevents redirection -->
@@ -9,10 +10,12 @@
 <form method="POST" action="{PUBLIC_API_ENDPOINT}/api/attendance/add/attendance" target="dummyframe">
 	<label>
 		uID
-		<input name="uid" placeholder="u1234567" pattern="u[0-9]+" />
+		<input name="uid" placeholder="u1234567" pattern="^[uU][0-9]+$" bind:value={uid} />
 	</label>
 	<button onclick={() => {
-        alert("Checked In");
+        if (/^[uU][0-9]+$/.test(uid)) {
+            alert("Checked In");
+        }
     }}>Check in</button>
 </form>
 
