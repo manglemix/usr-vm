@@ -18,6 +18,7 @@ mod scheduler;
 mod manifest;
 mod webhook;
 mod backup;
+mod attendance;
 
 struct LogWriter {
     inner: &'static Mutex<LineWriter<std::fs::File>>,
@@ -99,9 +100,14 @@ async fn main() -> anyhow::Result<()> {
                 manifest::reset_tables(&db).await?;
                 info!("Reset manifest tables");
             }
+            "attendance" => {
+                attendance::reset_tables(&db).await?;
+                info!("Reset attendance tables");
+            }
             "all" => {
                 scheduler::reset_tables(&db).await?;
                 manifest::reset_tables(&db).await?;
+                attendance::reset_tables(&db).await?;
                 info!("Reset all tables");
             }
             _ => {
@@ -122,7 +128,8 @@ async fn main() -> anyhow::Result<()> {
             "/api",
             Router::new()
                 .nest("/scheduler", scheduler::router())
-                .nest("/manifest", manifest::router()),
+                .nest("/manifest", manifest::router())
+                .nest("/attendance", attendance::router()),
         )
         .layer(
             ServiceBuilder::new()

@@ -10,6 +10,10 @@
 			<h2>Scheduler</h2>
 			<p>A unified schedule for Utah Student Robotics</p>
 		</a>
+		<a class="app-card attendance" href={`${base}/attendance`}>
+			<h2>Attendance</h2>
+			<p>Add your attendance here if you are contributing!</p>
+		</a>
 		<!-- <a class="app-card manifest" href={`${base}/manifest`}>
 			<h2>Manifest</h2>
 			<p>Internal tracking of orders and inventory</p>
@@ -33,6 +37,9 @@
 	}
 	.scheduler {
 		background-color: aquamarine;
+	}
+	.attendance {
+		background-color: lightcoral;
 	}
 	/* .manifest {
 		background-color: cornflowerblue;

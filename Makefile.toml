@@ -1,4 +1,3 @@
-
 [tasks.backend]
 workspace = false
 command = "cargo"
