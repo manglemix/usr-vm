@@ -344,7 +344,7 @@ async fn update_order(
                     ref_number: ActiveValue::Set(update_order.ref_number),
                 };
 
-                active_model.insert(tx).await?;
+                active_model.update(tx).await?;
 
                 Result::<_, sea_orm::DbErr>::Ok(())
             })
